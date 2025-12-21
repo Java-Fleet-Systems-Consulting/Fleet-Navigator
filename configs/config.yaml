@@ -1,0 +1,41 @@
+# Fleet Navigator Konfiguration
+# Diese Datei wird beim Start geladen (falls vorhanden)
+
+# Server-Einstellungen
+server:
+  port: 2026
+  host: "localhost"
+
+# Ollama-Einstellungen
+ollama:
+  url: "http://localhost:11434"
+  default_model: "qwen2.5:7b"
+  timeout_seconds: 120
+
+# Smart Model Selection
+models:
+  enabled: true
+  default: "qwen2.5:7b"
+  code: "qwen2.5-coder:7b"
+  fast: "llama3.2:3b"
+  vision: "llava:13b"
+
+# Datenverzeichnis (Standard: ~/.fleet-navigator)
+# data_dir: "/custom/path"
+
+# Sicherheits-Einstellungen
+security:
+  # Pairing-Timeout in Sekunden
+  pairing_timeout: 300
+  # Maximale gleichzeitige Verbindungen pro Mate
+  max_connections_per_mate: 1
+
+# Logging
+logging:
+  level: "info"  # debug, info, warn, error
+  # log_file: "/var/log/fleet-navigator.log"
+
+# Experten-System
+experts:
+  # Standard-Experten beim ersten Start erstellen
+  seed_defaults: true

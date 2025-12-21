@@ -1,0 +1,35 @@
+# Build artifacts
+dist/
+*.exe
+main
+navigator
+
+# Dependencies
+web/node_modules/
+node_modules/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Vite cache
+web/.vite/
+.vite/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temp files
+*.tmp
+*~
+
+# Markdown files (except CLAUDE.md and README.md)
+*.md
+!CLAUDE.md
+!README.md

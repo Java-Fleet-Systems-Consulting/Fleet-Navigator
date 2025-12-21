@@ -1,0 +1,28 @@
+{
+  "server": {
+    "port": "2026",
+    "host": "localhost"
+  },
+  "ollama": {
+    "url": "http://localhost:11434",
+    "default_model": "qwen2.5:7b",
+    "timeout_seconds": 120
+  },
+  "models": {
+    "enabled": true,
+    "default": "qwen2.5:7b",
+    "code": "qwen2.5-coder:7b",
+    "fast": "llama3.2:3b",
+    "vision": "llava:13b"
+  },
+  "security": {
+    "pairing_timeout": 300,
+    "max_connections_per_mate": 1
+  },
+  "logging": {
+    "level": "info"
+  },
+  "experts": {
+    "seed_defaults": true
+  }
+}

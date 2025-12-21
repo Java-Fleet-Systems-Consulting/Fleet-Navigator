@@ -1,0 +1,110 @@
+name: Build Whisper Binaries
+
+on:
+  workflow_dispatch:  # Manuell auslösen
+  push:
+    paths:
+      - '.github/workflows/build-whisper.yml'
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout whisper.cpp
+        run: git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git
+
+      - name: Build whisper.cpp (Linux x64)
+        run: |
+          cd whisper.cpp
+          mkdir build && cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF
+          make -j$(nproc) whisper-cli
+
+      - name: Upload Linux binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: whisper-linux-amd64
+          path: whisper.cpp/build/bin/whisper-cli
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout whisper.cpp
+        run: git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git
+
+      - name: Build whisper.cpp (Windows x64)
+        run: |
+          cd whisper.cpp
+          mkdir build
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF
+          cmake --build . --config Release --target whisper-cli
+
+      - name: Upload Windows binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: whisper-windows-amd64
+          path: whisper.cpp/build/bin/Release/whisper-cli.exe
+
+  build-macos-intel:
+    runs-on: macos-13  # Intel Mac
+    steps:
+      - name: Checkout whisper.cpp
+        run: git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git
+
+      - name: Build whisper.cpp (macOS Intel)
+        run: |
+          cd whisper.cpp
+          mkdir build && cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF
+          make -j$(sysctl -n hw.ncpu) whisper-cli
+
+      - name: Upload macOS Intel binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: whisper-darwin-amd64
+          path: whisper.cpp/build/bin/whisper-cli
+
+  build-macos-arm:
+    runs-on: macos-14  # Apple Silicon
+    steps:
+      - name: Checkout whisper.cpp
+        run: git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git
+
+      - name: Build whisper.cpp (macOS ARM)
+        run: |
+          cd whisper.cpp
+          mkdir build && cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF
+          make -j$(sysctl -n hw.ncpu) whisper-cli
+
+      - name: Upload macOS ARM binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: whisper-darwin-arm64
+          path: whisper.cpp/build/bin/whisper-cli
+
+  package:
+    needs: [build-linux, build-windows, build-macos-intel, build-macos-arm]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: binaries
+
+      - name: Organize binaries
+        run: |
+          mkdir -p release/bin
+          cp binaries/whisper-linux-amd64/whisper-cli release/bin/whisper-cli-linux-amd64
+          cp binaries/whisper-windows-amd64/whisper-cli.exe release/bin/whisper-cli-windows-amd64.exe
+          cp binaries/whisper-darwin-amd64/whisper-cli release/bin/whisper-cli-darwin-amd64
+          cp binaries/whisper-darwin-arm64/whisper-cli release/bin/whisper-cli-darwin-arm64
+          chmod +x release/bin/whisper-cli-*
+          ls -la release/bin/
+
+      - name: Upload combined package
+        uses: actions/upload-artifact@v4
+        with:
+          name: whisper-binaries-all-platforms
+          path: release/bin/

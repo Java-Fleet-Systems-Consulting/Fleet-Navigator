@@ -1,0 +1,456 @@
+{
+  "app": {
+    "name": "Fleet Navigator",
+    "tagline": "Tu asistente de IA para la flota",
+    "poweredBy": "Impulsado por Ollama"
+  },
+  "welcome": {
+    "title": "Bienvenido a bordo",
+    "subtitle": "¿En qué puedo ayudarte hoy?",
+    "suggestions": {
+      "analyze": "Analizar documento",
+      "explain": "Explicar concepto",
+      "help": "Ayuda con código",
+      "research": "Investigar tema"
+    }
+  },
+  "loading": {
+    "thinking": "Pensando...",
+    "searching": "Buscando...",
+    "processing": "Procesando...",
+    "connecting": "Conectando...",
+    "loading": "Cargando..."
+  },
+  "sidebar": {
+    "newChat": "Nuevo chat",
+    "history": "Historial",
+    "today": "Hoy",
+    "yesterday": "Ayer",
+    "lastWeek": "Última semana",
+    "older": "Más antiguo",
+    "noChats": "Aún no hay chats",
+    "deleteChat": "Eliminar chat",
+    "renameChat": "Renombrar chat",
+    "searchChats": "Buscar chats...",
+    "clearHistory": "Borrar historial",
+    "exportChat": "Exportar chat",
+    "importChat": "Importar chat"
+  },
+  "topbar": {
+    "toggleSidebar": "Alternar barra lateral",
+    "collapseSidebar": "Colapsar barra lateral",
+    "expandSidebar": "Expandir barra lateral",
+    "hideSidebar": "Ocultar barra lateral",
+    "showSidebar": "Mostrar barra lateral",
+    "version": "Versión",
+    "matesOnline": "{count} de {total} Contramaestres en línea - Clic para panel",
+    "noMatesPaired": "Sin Contramaestres emparejados - Clic para panel",
+    "mates": "Contramaestres",
+    "noMates": "Sin Contramaestres"
+  },
+  "nav": {
+    "chat": "Chat",
+    "experts": "Expertos",
+    "models": "Modelos",
+    "documents": "Documentos",
+    "mates": "Contramaestres de Flota",
+    "settings": "Configuración"
+  },
+  "chat": {
+    "placeholder": "Escribe tu mensaje...",
+    "send": "Enviar",
+    "stop": "Detener",
+    "regenerate": "Regenerar",
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "edit": "Editar",
+    "delete": "Eliminar",
+    "thinking": "Pensando...",
+    "newChat": "Nuevo Chat",
+    "clearChat": "Borrar Chat",
+    "exportChat": "Exportar Chat",
+    "you": "Tú",
+    "assistant": "Asistente",
+    "system": "Sistema",
+    "contextLength": "Longitud del contexto",
+    "tokens": "Tokens",
+    "uploadFile": "Subir archivo",
+    "attachFile": "Adjuntar archivo",
+    "voiceInput": "Entrada de voz",
+    "commands": {
+      "title": "Comandos",
+      "clear": "Borrar chat",
+      "export": "Exportar chat",
+      "help": "Mostrar ayuda"
+    },
+    "errors": {
+      "empty": "Por favor introduce un mensaje",
+      "tooLong": "Mensaje demasiado largo",
+      "sendFailed": "Error al enviar mensaje",
+      "connectionLost": "Conexión perdida"
+    }
+  },
+  "experts": {
+    "title": "Expertos",
+    "subtitle": "Especialistas de IA para tus tareas",
+    "create": "Crear Experto",
+    "edit": "Editar Experto",
+    "delete": "Eliminar Experto",
+    "noExperts": "Aún no hay expertos",
+    "createFirst": "Crea tu primer experto",
+    "builtIn": "Integrado",
+    "custom": "Personalizado",
+    "active": "Activo",
+    "selectExpert": "Seleccionar Experto",
+    "currentExpert": "Experto actual",
+    "switchExpert": "Cambiar experto",
+    "form": {
+      "name": "Nombre",
+      "namePlaceholder": "p.ej. Asistente de Código",
+      "description": "Descripción",
+      "descriptionPlaceholder": "¿En qué se especializa este experto?",
+      "systemPrompt": "Prompt del Sistema",
+      "systemPromptPlaceholder": "Instrucciones para el comportamiento de la IA...",
+      "model": "Modelo",
+      "selectModel": "Seleccionar modelo",
+      "temperature": "Temperatura",
+      "temperatureHelp": "Más alto = más creativo, más bajo = más preciso",
+      "icon": "Icono",
+      "color": "Color"
+    },
+    "actions": {
+      "save": "Guardar",
+      "cancel": "Cancelar",
+      "duplicate": "Duplicar",
+      "export": "Exportar",
+      "import": "Importar"
+    },
+    "builtin": {
+      "general": {
+        "name": "Asistente General",
+        "description": "Un asistente útil de propósito general"
+      },
+      "coder": {
+        "name": "Experto en Código",
+        "description": "Especializado en programación y desarrollo de software"
+      },
+      "writer": {
+        "name": "Experto en Escritura",
+        "description": "Ayuda con escritura creativa y técnica"
+      },
+      "analyst": {
+        "name": "Experto en Análisis",
+        "description": "Análisis de datos e interpretación"
+      }
+    }
+  },
+  "models": {
+    "title": "Modelos",
+    "subtitle": "Gestionar modelos de IA",
+    "available": "Modelos disponibles",
+    "installed": "Modelos instalados",
+    "download": "Descargar",
+    "downloading": "Descargando...",
+    "delete": "Eliminar",
+    "deleting": "Eliminando...",
+    "size": "Tamaño",
+    "parameters": "Parámetros",
+    "quantization": "Cuantización",
+    "family": "Familia",
+    "format": "Formato",
+    "noModels": "No hay modelos instalados",
+    "downloadFirst": "Descarga tu primer modelo",
+    "pullModel": "Descargar Modelo",
+    "pullPlaceholder": "p.ej. llama3.2, mistral, codellama",
+    "searchModels": "Buscar modelos...",
+    "recommended": "Recomendado",
+    "all": "Todos",
+    "categories": {
+      "chat": "Chat",
+      "code": "Código",
+      "embedding": "Embedding",
+      "vision": "Visión"
+    },
+    "details": {
+      "context": "Longitud del Contexto",
+      "modified": "Modificado",
+      "created": "Creado",
+      "license": "Licencia"
+    },
+    "actions": {
+      "setDefault": "Establecer como predeterminado",
+      "viewDetails": "Ver detalles",
+      "copyName": "Copiar nombre"
+    },
+    "status": {
+      "ready": "Listo",
+      "loading": "Cargando",
+      "error": "Error",
+      "downloading": "Descargando"
+    }
+  },
+  "documents": {
+    "title": "Documentos",
+    "subtitle": "Gestionar documentos RAG",
+    "upload": "Subir Documento",
+    "uploadMultiple": "Subir Documentos",
+    "noDocuments": "Aún no hay documentos",
+    "uploadFirst": "Sube tu primer documento",
+    "dragDrop": "Arrastra archivos aquí",
+    "orClick": "o haz clic para seleccionar",
+    "supportedFormats": "Formatos soportados",
+    "maxSize": "Tamaño máximo",
+    "processing": "Procesando...",
+    "indexed": "Indexado",
+    "pending": "Pendiente",
+    "failed": "Fallido",
+    "delete": "Eliminar",
+    "reindex": "Reindexar",
+    "preview": "Vista previa",
+    "download": "Descargar",
+    "search": "Buscar en documentos...",
+    "filter": {
+      "all": "Todos",
+      "pdf": "PDF",
+      "text": "Texto",
+      "code": "Código",
+      "other": "Otros"
+    },
+    "details": {
+      "pages": "Páginas",
+      "words": "Palabras",
+      "chunks": "Fragmentos",
+      "uploaded": "Subido",
+      "lastAccessed": "Último acceso"
+    },
+    "errors": {
+      "uploadFailed": "Error al subir",
+      "tooLarge": "Archivo demasiado grande",
+      "unsupportedFormat": "Formato no soportado",
+      "processingFailed": "Error en el procesamiento"
+    }
+  },
+  "mates": {
+    "title": "Contramaestres de Flota",
+    "subtitle": "Gestionar conexiones de pares",
+    "noMates": "Sin Contramaestres conectados",
+    "addMate": "Añadir Contramaestre",
+    "pairCode": "Código de Emparejamiento",
+    "generateCode": "Generar Código",
+    "enterCode": "Introducir Código",
+    "scanning": "Escaneando red...",
+    "discovered": "Descubierto",
+    "paired": "Emparejado",
+    "online": "En línea",
+    "offline": "Sin conexión",
+    "lastSeen": "Última vez visto",
+    "ping": "Ping",
+    "disconnect": "Desconectar",
+    "reconnect": "Reconectar",
+    "shareModel": "Compartir Modelo",
+    "shareChat": "Compartir Chat",
+    "sync": "Sincronizar",
+    "syncing": "Sincronizando...",
+    "details": {
+      "hostname": "Nombre de host",
+      "ip": "Dirección IP",
+      "port": "Puerto",
+      "version": "Versión",
+      "models": "Modelos compartidos",
+      "uptime": "Tiempo activo"
+    },
+    "errors": {
+      "connectionFailed": "Error de conexión",
+      "pairingFailed": "Error de emparejamiento",
+      "timeout": "Tiempo de conexión agotado",
+      "invalidCode": "Código de emparejamiento inválido"
+    }
+  },
+  "settings": {
+    "title": "Configuración",
+    "subtitle": "Configurar Fleet Navigator",
+    "tabs": {
+      "general": "General",
+      "appearance": "Apariencia",
+      "models": "Modelos",
+      "connection": "Conexión",
+      "advanced": "Avanzado",
+      "about": "Acerca de"
+    },
+    "general": {
+      "language": "Idioma",
+      "languageDesc": "Selecciona el idioma de la interfaz",
+      "autoSave": "Guardado automático",
+      "autoSaveDesc": "Guardar chats automáticamente",
+      "notifications": "Notificaciones",
+      "notificationsDesc": "Activar notificaciones del escritorio",
+      "sounds": "Sonidos",
+      "soundsDesc": "Reproducir efectos de sonido",
+      "analytics": "Analíticas",
+      "analyticsDesc": "Ayudar a mejorar Fleet Navigator"
+    },
+    "appearance": {
+      "theme": "Tema",
+      "themeDesc": "Elegir esquema de colores",
+      "themes": {
+        "light": "Claro",
+        "dark": "Oscuro",
+        "system": "Sistema",
+        "auto": "Automático"
+      },
+      "fontSize": "Tamaño de fuente",
+      "fontSizeDesc": "Ajustar tamaño del texto",
+      "fontSizes": {
+        "small": "Pequeño",
+        "medium": "Mediano",
+        "large": "Grande"
+      },
+      "compactMode": "Modo compacto",
+      "compactModeDesc": "Reducir espaciado para más contenido",
+      "animations": "Animaciones",
+      "animationsDesc": "Activar efectos de movimiento"
+    },
+    "connection": {
+      "ollamaUrl": "URL de Ollama",
+      "ollamaUrlDesc": "Dirección del servidor Ollama",
+      "ollamaUrlPlaceholder": "http://localhost:11434",
+      "testConnection": "Probar Conexión",
+      "testing": "Probando...",
+      "connected": "Conectado",
+      "disconnected": "Desconectado",
+      "autoReconnect": "Reconexión automática",
+      "autoReconnectDesc": "Reconectar automáticamente cuando se pierda la conexión",
+      "timeout": "Tiempo de espera",
+      "timeoutDesc": "Tiempo máximo de espera de respuesta"
+    },
+    "advanced": {
+      "contextLength": "Longitud del Contexto",
+      "contextLengthDesc": "Máximo de tokens de contexto",
+      "streamingSpeed": "Velocidad de Streaming",
+      "streamingSpeedDesc": "Velocidad de renderizado de texto",
+      "debugMode": "Modo de Depuración",
+      "debugModeDesc": "Mostrar información de depuración",
+      "experimentalFeatures": "Funciones Experimentales",
+      "experimentalFeaturesDesc": "Activar nuevas funciones en pruebas",
+      "clearCache": "Limpiar Caché",
+      "clearCacheDesc": "Eliminar datos en caché",
+      "resetSettings": "Restablecer Configuración",
+      "resetSettingsDesc": "Restaurar valores predeterminados",
+      "exportSettings": "Exportar Configuración",
+      "importSettings": "Importar Configuración"
+    },
+    "about": {
+      "version": "Versión",
+      "buildDate": "Fecha de compilación",
+      "author": "Autor",
+      "license": "Licencia",
+      "repository": "Repositorio",
+      "documentation": "Documentación",
+      "changelog": "Registro de cambios",
+      "checkUpdates": "Buscar Actualizaciones",
+      "upToDate": "Estás al día",
+      "updateAvailable": "Actualización disponible",
+      "releaseNotes": "Notas de la versión",
+      "reportBug": "Reportar Error",
+      "requestFeature": "Solicitar Función",
+      "credits": "Créditos",
+      "madeWith": "Hecho con",
+      "by": "por",
+      "openSource": "Software de código abierto"
+    }
+  },
+  "errors": {
+    "general": "Algo salió mal",
+    "network": "Error de red",
+    "timeout": "Tiempo de espera agotado",
+    "notFound": "No encontrado",
+    "unauthorized": "No autorizado",
+    "forbidden": "Prohibido",
+    "serverError": "Error del servidor",
+    "connectionFailed": "Error de conexión",
+    "ollamaNotRunning": "Ollama no está ejecutándose",
+    "modelNotFound": "Modelo no encontrado",
+    "invalidRequest": "Solicitud inválida",
+    "retry": "Reintentar",
+    "dismiss": "Descartar",
+    "details": "Detalles del error"
+  },
+  "success": {
+    "saved": "Guardado con éxito",
+    "deleted": "Eliminado con éxito",
+    "copied": "Copiado al portapapeles",
+    "uploaded": "Subido con éxito",
+    "downloaded": "Descargado con éxito",
+    "connected": "Conectado con éxito",
+    "updated": "Actualizado con éxito"
+  },
+  "confirm": {
+    "delete": "¿Estás seguro de que quieres eliminar esto?",
+    "clear": "¿Estás seguro de que quieres borrar todo?",
+    "reset": "¿Estás seguro de que quieres restablecer?",
+    "unsavedChanges": "Tienes cambios sin guardar. ¿Quieres descartar?",
+    "yes": "Sí",
+    "no": "No",
+    "ok": "OK",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "save": "Guardar",
+    "discard": "Descartar"
+  },
+  "time": {
+    "justNow": "Ahora mismo",
+    "minutesAgo": "hace {n} minuto | hace {n} minutos",
+    "hoursAgo": "hace {n} hora | hace {n} horas",
+    "daysAgo": "hace {n} día | hace {n} días",
+    "weeksAgo": "hace {n} semana | hace {n} semanas",
+    "monthsAgo": "hace {n} mes | hace {n} meses"
+  },
+  "setup": {
+    "title": "Configuración de Fleet Navigator",
+    "welcome": "Bienvenido a Fleet Navigator",
+    "welcomeSubtitle": "Configuremos tu asistente de IA para la flota",
+    "step": "Paso {current} de {total}",
+    "next": "Siguiente",
+    "back": "Atrás",
+    "finish": "Finalizar",
+    "skip": "Saltar",
+    "language": {
+      "title": "Elegir Idioma",
+      "subtitle": "Selecciona tu idioma preferido"
+    },
+    "connection": {
+      "title": "Conectar a Ollama",
+      "subtitle": "Configurar conexión del servidor"
+    },
+    "model": {
+      "title": "Seleccionar Modelo",
+      "subtitle": "Elige tu modelo de IA predeterminado"
+    },
+    "complete": {
+      "title": "Configuración Completa",
+      "subtitle": "Estás listo para comenzar",
+      "startButton": "Iniciar Fleet Navigator"
+    }
+  },
+  "shortcuts": {
+    "title": "Atajos de Teclado",
+    "newChat": "Nuevo chat",
+    "send": "Enviar mensaje",
+    "cancel": "Cancelar",
+    "search": "Buscar",
+    "settings": "Abrir configuración",
+    "toggleSidebar": "Alternar barra lateral",
+    "focusInput": "Enfocar entrada",
+    "escape": "Cerrar/Cancelar"
+  },
+  "accessibility": {
+    "skipToContent": "Ir al contenido",
+    "menuButton": "Botón del menú",
+    "closeButton": "Botón de cerrar",
+    "loading": "Cargando",
+    "error": "Error",
+    "success": "Éxito",
+    "required": "Requerido",
+    "optional": "Opcional"
+  }
+}

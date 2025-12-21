@@ -1,0 +1,337 @@
+name: Build Fleet Navigator
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (z.B. 1.0.0)'
+        required: true
+        default: '1.0.0'
+  push:
+    tags:
+      - 'v*'
+
+env:
+  GO_VERSION: '1.21'
+  NODE_VERSION: '20'
+  LLAMA_CPP_VERSION: 'b4756'  # Stabile Version von llama.cpp
+
+jobs:
+  # Schritt 1a: Whisper Binaries für alle Plattformen bauen
+  build-whisper:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            whisper_name: whisper-cli
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+            whisper_name: whisper-cli.exe
+          - os: macos-13
+            goos: darwin
+            goarch: amd64
+            whisper_name: whisper-cli
+          - os: macos-14
+            goos: darwin
+            goarch: arm64
+            whisper_name: whisper-cli
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout whisper.cpp
+        run: git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git
+
+      - name: Build whisper.cpp
+        shell: bash
+        run: |
+          cd whisper.cpp
+          mkdir build && cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF
+          cmake --build . --config Release --target whisper-cli -j 4
+
+      - name: Find and upload binary
+        shell: bash
+        run: |
+          mkdir -p output
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            cp whisper.cpp/build/bin/Release/${{ matrix.whisper_name }} output/ 2>/dev/null || \
+            cp whisper.cpp/build/bin/${{ matrix.whisper_name }} output/
+          else
+            cp whisper.cpp/build/bin/${{ matrix.whisper_name }} output/
+          fi
+          chmod +x output/${{ matrix.whisper_name }} 2>/dev/null || true
+
+      - name: Upload whisper binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: whisper-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: output/${{ matrix.whisper_name }}
+
+  # Schritt 1b: llama-server (llama.cpp) für alle Plattformen bauen
+  build-llama-server:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            binary_name: llama-server
+            cmake_extra: ""
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+            binary_name: llama-server.exe
+            cmake_extra: ""
+          - os: macos-13
+            goos: darwin
+            goarch: amd64
+            binary_name: llama-server
+            cmake_extra: "-DGGML_METAL=OFF"
+          - os: macos-14
+            goos: darwin
+            goarch: arm64
+            binary_name: llama-server
+            cmake_extra: "-DGGML_METAL=ON"
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout llama.cpp
+        run: git clone --depth 1 --branch ${{ env.LLAMA_CPP_VERSION }} https://github.com/ggerganov/llama.cpp.git
+
+      - name: Build llama.cpp (CPU-only, static)
+        shell: bash
+        run: |
+          cd llama.cpp
+          mkdir build && cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release \
+                   -DBUILD_SHARED_LIBS=OFF \
+                   -DGGML_CUDA=OFF \
+                   -DGGML_VULKAN=OFF \
+                   ${{ matrix.cmake_extra }}
+          cmake --build . --config Release --target llama-server -j 4
+
+      - name: Find and prepare binary
+        shell: bash
+        run: |
+          mkdir -p output
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            cp llama.cpp/build/bin/Release/${{ matrix.binary_name }} output/ 2>/dev/null || \
+            cp llama.cpp/build/bin/${{ matrix.binary_name }} output/
+          else
+            cp llama.cpp/build/bin/${{ matrix.binary_name }} output/
+          fi
+          chmod +x output/${{ matrix.binary_name }} 2>/dev/null || true
+          ls -la output/
+
+      - name: Upload llama-server binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: llama-server-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: output/${{ matrix.binary_name }}
+
+  # Schritt 1c: llama-server mit CUDA für Linux (optional, größer)
+  build-llama-server-cuda:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install CUDA Toolkit
+        uses: Jimver/cuda-toolkit@v0.2.11
+        with:
+          cuda: '12.1.0'
+          method: 'network'
+          sub-packages: '["nvcc", "cudart", "cublas", "cublas-dev"]'
+
+      - name: Checkout llama.cpp
+        run: git clone --depth 1 --branch ${{ env.LLAMA_CPP_VERSION }} https://github.com/ggerganov/llama.cpp.git
+
+      - name: Build llama.cpp with CUDA
+        run: |
+          cd llama.cpp
+          mkdir build && cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release \
+                   -DBUILD_SHARED_LIBS=ON \
+                   -DGGML_CUDA=ON \
+                   -DCMAKE_CUDA_ARCHITECTURES="60;70;75;80;86;89;90"
+          cmake --build . --config Release --target llama-server -j 4
+
+      - name: Package CUDA build with libraries
+        run: |
+          mkdir -p output
+          # Binary
+          cp llama.cpp/build/bin/llama-server output/
+          # Shared libraries
+          cp llama.cpp/build/src/libllama.so* output/ 2>/dev/null || true
+          cp llama.cpp/build/ggml/src/libggml*.so* output/ 2>/dev/null || true
+          # Wrapper script
+          cat > output/run-llama-server.sh << 'EOF'
+          #!/bin/bash
+          SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+          export LD_LIBRARY_PATH="$SCRIPT_DIR:$LD_LIBRARY_PATH"
+          exec "$SCRIPT_DIR/llama-server" "$@"
+          EOF
+          chmod +x output/run-llama-server.sh output/llama-server
+          ls -la output/
+
+      - name: Create CUDA archive
+        run: |
+          cd output
+          tar -czvf ../llama-server-linux-amd64-cuda.tar.gz .
+
+      - name: Upload CUDA build
+        uses: actions/upload-artifact@v4
+        with:
+          name: llama-server-linux-amd64-cuda
+          path: llama-server-linux-amd64-cuda.tar.gz
+
+  # Schritt 2: Frontend bauen
+  build-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: cd web && npm ci
+
+      - name: Build frontend
+        run: cd web && npm run build
+
+      - name: Upload frontend
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: web/dist/
+
+  # Schritt 3: Fleet Navigator für alle Plattformen bauen
+  build-navigator:
+    needs: [build-whisper, build-llama-server, build-frontend]
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            ext: ''
+          - os: ubuntu-latest
+            goos: windows
+            goarch: amd64
+            ext: '.exe'
+          - os: ubuntu-latest
+            goos: darwin
+            goarch: amd64
+            ext: ''
+          - os: ubuntu-latest
+            goos: darwin
+            goarch: arm64
+            ext: ''
+
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Download frontend
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: cmd/navigator/dist/
+
+      - name: Download whisper binary
+        uses: actions/download-artifact@v4
+        with:
+          name: whisper-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: internal/voice/bin/${{ matrix.goos }}-${{ matrix.goarch }}/
+
+      - name: Make whisper executable
+        run: chmod +x internal/voice/bin/${{ matrix.goos }}-${{ matrix.goarch }}/* 2>/dev/null || true
+
+      - name: Download llama-server binary
+        uses: actions/download-artifact@v4
+        with:
+          name: llama-server-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: internal/llamaserver/bin/${{ matrix.goos }}-${{ matrix.goarch }}/
+
+      - name: Make llama-server executable
+        run: chmod +x internal/llamaserver/bin/${{ matrix.goos }}-${{ matrix.goarch }}/* 2>/dev/null || true
+
+      - name: Build Fleet Navigator
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          go build -ldflags="-s -w" -o dist/fleet-navigator-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./cmd/navigator
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: fleet-navigator-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/fleet-navigator-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+
+  # Schritt 4: Release erstellen
+  release:
+    needs: [build-navigator, build-llama-server-cuda]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Download all binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+
+          # Fleet Navigator Binaries (mit eingebettetem whisper + llama-server CPU)
+          cp artifacts/fleet-navigator-linux-amd64/fleet-navigator-linux-amd64 release/
+          cp artifacts/fleet-navigator-windows-amd64/fleet-navigator-windows-amd64.exe release/
+          cp artifacts/fleet-navigator-darwin-amd64/fleet-navigator-darwin-amd64 release/
+          cp artifacts/fleet-navigator-darwin-arm64/fleet-navigator-darwin-arm64 release/
+
+          # CUDA Version von llama-server (separater Download für NVIDIA GPU User)
+          cp artifacts/llama-server-linux-amd64-cuda/llama-server-linux-amd64-cuda.tar.gz release/
+
+          chmod +x release/fleet-navigator-* 2>/dev/null || true
+
+          echo "=== Release Contents ==="
+          ls -la release/
+          echo "========================"
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release/*
+          generate_release_notes: true
+          body: |
+            ## Fleet Navigator Release
+
+            ### Enthaltene Binaries
+            - **fleet-navigator-linux-amd64** - Linux x64 (mit eingebettetem whisper-cli + llama-server CPU)
+            - **fleet-navigator-windows-amd64.exe** - Windows x64
+            - **fleet-navigator-darwin-amd64** - macOS Intel
+            - **fleet-navigator-darwin-arm64** - macOS Apple Silicon
+
+            ### Optionale Downloads
+            - **llama-server-linux-amd64-cuda.tar.gz** - llama-server mit NVIDIA CUDA Support (für GPU-Beschleunigung)
+              - Entpacken: `tar -xzf llama-server-linux-amd64-cuda.tar.gz -C ~/.fleet-navigator/bin/`
+              - Erfordert NVIDIA GPU + CUDA Treiber
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: fleet-navigator-all-platforms
+          path: release/
