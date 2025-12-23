@@ -284,10 +284,27 @@ func (u *Updater) ApplyUpdate() error {
 
 // GetUpdateDirectory gibt das Verzeichnis für Update-Downloads zurück
 func GetUpdateDirectory() string {
-	home, _ := os.UserHomeDir()
-	dir := filepath.Join(home, ".fleet-navigator", "updates")
+	dir := filepath.Join(GetDataDirectory(), "updates")
 	os.MkdirAll(dir, 0755)
 	return dir
+}
+
+// GetDataDirectory gibt das plattformspezifische Datenverzeichnis zurück
+// Windows: %LOCALAPPDATA%\FleetNavigator
+// Linux/macOS: ~/.fleet-navigator
+func GetDataDirectory() string {
+	if runtime.GOOS == "windows" {
+		if localAppData := os.Getenv("LOCALAPPDATA"); localAppData != "" {
+			return filepath.Join(localAppData, "FleetNavigator")
+		}
+		// Fallback auf UserConfigDir
+		if configDir, err := os.UserConfigDir(); err == nil {
+			return filepath.Join(configDir, "FleetNavigator")
+		}
+	}
+	// Linux/macOS
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".fleet-navigator")
 }
 
 // isNewerVersion vergleicht Semver-Versionen

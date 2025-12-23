@@ -494,6 +494,8 @@
       "installed": "Installed",
       "autoPlay": "Auto-play",
       "autoPlayDesc": "Automatically read responses aloud",
+      "ttsEnabled": "Text-to-Speech enabled",
+      "ttsEnabledDesc": "Enable reading responses aloud via speaker button",
       "whisperStt": "Whisper STT (Speech Input)",
       "piperTts": "Piper TTS (Speech Output)",
       "ready": "Ready",

@@ -580,12 +580,12 @@ onMounted(async () => {
   // Load backend version
   await loadBackendVersion()
 
-  // Load Karla prompt if only title is set but no content
-  if (chatStore.systemPromptTitle === 'Karla' && !chatStore.systemPrompt) {
-    const karlaTemplate = promptTemplates.value.find(t => t.name === 'Karla')
-    if (karlaTemplate) {
-      chatStore.systemPrompt = karlaTemplate.content
-      console.log('✅ Auto-loaded Karla prompt')
+  // Load Ewa prompt if only title is set but no content
+  if (chatStore.systemPromptTitle === 'Ewa' && !chatStore.systemPrompt) {
+    const ewaTemplate = promptTemplates.value.find(t => t.name === 'Ewa')
+    if (ewaTemplate) {
+      chatStore.systemPrompt = ewaTemplate.content
+      console.log('✅ Auto-loaded Ewa prompt')
     }
   }
 

@@ -14,6 +14,20 @@ type ProviderChecker interface {
 	GetActiveProvider() string
 }
 
+// SamplingParamsProvider interface für Sampling-Parameter aus Settings
+type SamplingParamsProvider interface {
+	GetSamplingParams() SamplingParams
+}
+
+// SamplingParams für Settings (identisch mit settings.SamplingParams)
+type SamplingParams struct {
+	Temperature   float64
+	TopP          float64
+	TopK          int
+	MaxTokens     int
+	RepeatPenalty float64
+}
+
 // LlamaSamplingParams für Sampling-Parameter (identisch mit llamaserver.SamplingParams)
 type LlamaSamplingParams struct {
 	Temperature float64
@@ -42,6 +56,7 @@ type Adapter struct {
 	systemPrompt     string
 	providerChecker  ProviderChecker
 	llamaServer      LlamaServerChatter
+	samplingProvider SamplingParamsProvider
 }
 
 // NewAdapter erstellt einen neuen Chat-Adapter
@@ -61,6 +76,29 @@ func (a *Adapter) SetProviderChecker(checker ProviderChecker) {
 // SetLlamaServer setzt den llama-server für Provider-basiertes Routing
 func (a *Adapter) SetLlamaServer(server LlamaServerChatter) {
 	a.llamaServer = server
+}
+
+// SetSamplingProvider setzt den Provider für Sampling-Parameter
+func (a *Adapter) SetSamplingProvider(provider SamplingParamsProvider) {
+	a.samplingProvider = provider
+}
+
+// getSamplingParams holt die aktuellen Sampling-Parameter
+func (a *Adapter) getSamplingParams() LlamaSamplingParams {
+	if a.samplingProvider == nil {
+		// Defaults wenn kein Provider gesetzt
+		return LlamaSamplingParams{
+			Temperature: 0.7,
+			TopP:        0.9,
+			MaxTokens:   4096,
+		}
+	}
+	params := a.samplingProvider.GetSamplingParams()
+	return LlamaSamplingParams{
+		Temperature: params.Temperature,
+		TopP:        params.TopP,
+		MaxTokens:   params.MaxTokens,
+	}
 }
 
 // Chat implementiert das ChatHandler Interface
@@ -98,9 +136,14 @@ func (a *Adapter) chatWithLlamaServer(sessionID, message string, onChunk func(ch
 	}
 	session.mu.Unlock()
 
-	// Antwort sammeln
+	// Sampling-Parameter aus Settings holen
+	samplingParams := a.getSamplingParams()
+	log.Printf("Chat mit Sampling-Parametern: temp=%.2f, topP=%.2f, maxTokens=%d",
+		samplingParams.Temperature, samplingParams.TopP, samplingParams.MaxTokens)
+
+	// Antwort sammeln - MIT Sampling-Parametern
 	var fullResponse string
-	err := a.llamaServer.StreamChat(llamaMessages, func(content string, done bool) {
+	err := a.llamaServer.StreamChatWithParams(llamaMessages, samplingParams, func(content string, done bool) {
 		fullResponse += content
 		if onChunk != nil && content != "" {
 			onChunk(content)
@@ -121,7 +164,6 @@ func (a *Adapter) chatWithLlamaServer(sessionID, message string, onChunk func(ch
 
 	return fullResponse, nil
 }
-
 
 // ChatWithModel verwendet ein explizit gewaehltes Modell
 func (a *Adapter) ChatWithModel(sessionID, message, model string, onChunk func(chunk string)) (string, error) {
@@ -175,9 +217,14 @@ func (a *Adapter) ChatWithSystemPrompt(sessionID, message, customSystemPrompt st
 	}
 	session.mu.Unlock()
 
-	// Antwort sammeln
+	// Sampling-Parameter aus Settings holen
+	samplingParams := a.getSamplingParams()
+	log.Printf("Chat mit System-Prompt: Sampling temp=%.2f, topP=%.2f",
+		samplingParams.Temperature, samplingParams.TopP)
+
+	// Antwort sammeln - MIT Sampling-Parametern
 	var fullResponse string
-	err := a.llamaServer.StreamChat(llamaMessages, func(content string, done bool) {
+	err := a.llamaServer.StreamChatWithParams(llamaMessages, samplingParams, func(content string, done bool) {
 		fullResponse += content
 		if onChunk != nil && content != "" {
 			onChunk(content)

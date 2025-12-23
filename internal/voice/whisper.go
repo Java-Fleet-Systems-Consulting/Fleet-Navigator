@@ -542,17 +542,90 @@ func (w *WhisperSTT) SetLanguage(language string) {
 	w.language = language
 }
 
-// downloadFile lädt eine Datei herunter mit Progress-Callback
+// downloadFile lädt eine Datei herunter mit Multi-Connection-Support für große Dateien
 func downloadFile(url, destPath, component, file string, progressChan chan<- DownloadProgress) error {
-	resp, err := http.Get(url)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
+	// Prüfe ob Multi-Connection möglich ist (HEAD Request)
+	headResp, err := http.Head(url)
+	if err == nil {
+		defer headResp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+		contentLength := headResp.ContentLength
+		acceptRanges := headResp.Header.Get("Accept-Ranges")
+
+		// Multi-Connection für Dateien > 50MB wenn Server Range Requests unterstützt
+		if contentLength > 50*1024*1024 && acceptRanges == "bytes" {
+			log.Printf("[%s] Multi-Connection Download aktiviert (%.1f MB, %d Verbindungen)",
+				component, float64(contentLength)/(1024*1024), 8)
+
+			if progressChan != nil {
+				progressChan <- DownloadProgress{
+					Component: component,
+					File:      file,
+					Status:    "multi-connection",
+				}
+			}
+
+			return downloadFileMulti(url, destPath, component, file, contentLength, 8, progressChan)
+		}
+	}
+
+	// Fallback: Single-Connection Download
+	return downloadFileSingle(url, destPath, component, file, progressChan)
+}
+
+// downloadFileSingle - Standard Single-Connection Download mit Retry-Logik
+func downloadFileSingle(url, destPath, component, file string, progressChan chan<- DownloadProgress) error {
+	maxRetries := 3
+	var resp *http.Response
+	var lastErr error
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			// Exponential backoff: 2s, 4s, 8s
+			backoffDuration := time.Duration(1<<attempt) * time.Second
+			log.Printf("[%s] Download Retry %d/%d nach %v...", component, attempt+1, maxRetries, backoffDuration)
+
+			if progressChan != nil {
+				progressChan <- DownloadProgress{
+					Component: component,
+					File:      file,
+					Status:    fmt.Sprintf("Retry %d/%d...", attempt+1, maxRetries),
+				}
+			}
+			time.Sleep(backoffDuration)
+		}
+
+		var err error
+		resp, err = http.Get(url)
+		if err != nil {
+			lastErr = err
+			log.Printf("[%s] Download-Fehler: %v", component, err)
+			continue
+		}
+
+		// Transiente Fehler (502, 503, 504) - Retry
+		if resp.StatusCode == 502 || resp.StatusCode == 503 || resp.StatusCode == 504 {
+			log.Printf("[%s] Server temporär nicht erreichbar (HTTP %d), versuche erneut...", component, resp.StatusCode)
+			resp.Body.Close()
+			lastErr = fmt.Errorf("HTTP %d: Server temporär nicht erreichbar", resp.StatusCode)
+			continue
+		}
+
+		// Erfolg oder nicht-transienter Fehler
+		if resp.StatusCode == http.StatusOK {
+			lastErr = nil
+			break
+		}
+
+		// Andere Fehler - nicht wiederholen
+		resp.Body.Close()
 		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)
 	}
+
+	if lastErr != nil {
+		return fmt.Errorf("Download nach %d Versuchen fehlgeschlagen: %w", maxRetries, lastErr)
+	}
+	defer resp.Body.Close()
 
 	totalBytes := resp.ContentLength
 
@@ -600,6 +673,187 @@ func downloadFile(url, destPath, component, file string, progressChan chan<- Dow
 		}
 		if err != nil {
 			return err
+		}
+	}
+
+	return nil
+}
+
+// downloadFileMulti lädt eine Datei mit mehreren parallelen Verbindungen herunter
+func downloadFileMulti(url, destPath, component, file string, totalSize int64, numConnections int, progressChan chan<- DownloadProgress) error {
+	// Chunk-Größe berechnen
+	chunkSize := totalSize / int64(numConnections)
+
+	// Temporäre Dateien für jeden Chunk
+	tempFiles := make([]string, numConnections)
+	for i := 0; i < numConnections; i++ {
+		tempFiles[i] = fmt.Sprintf("%s.part%d", destPath, i)
+	}
+
+	// Progress-Tracking
+	var progressMu sync.Mutex
+	chunkProgress := make([]int64, numConnections)
+	startTime := time.Now()
+
+	// Error-Channel für Goroutines
+	errChan := make(chan error, numConnections)
+	var wg sync.WaitGroup
+
+	// Parallele Downloads starten
+	for i := 0; i < numConnections; i++ {
+		wg.Add(1)
+		go func(connID int) {
+			defer wg.Done()
+
+			// Range berechnen
+			start := int64(connID) * chunkSize
+			end := start + chunkSize - 1
+			if connID == numConnections-1 {
+				end = totalSize - 1 // Letzter Chunk bis zum Ende
+			}
+
+			// HTTP Request mit Range Header
+			req, err := http.NewRequest("GET", url, nil)
+			if err != nil {
+				errChan <- fmt.Errorf("Conn %d: Request erstellen: %w", connID, err)
+				return
+			}
+			req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
+
+			client := &http.Client{Timeout: 30 * time.Minute}
+			resp, err := client.Do(req)
+			if err != nil {
+				errChan <- fmt.Errorf("Conn %d: Download starten: %w", connID, err)
+				return
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusPartialContent && resp.StatusCode != http.StatusOK {
+				errChan <- fmt.Errorf("Conn %d: HTTP %d", connID, resp.StatusCode)
+				return
+			}
+
+			// Temporäre Datei erstellen
+			out, err := os.Create(tempFiles[connID])
+			if err != nil {
+				errChan <- fmt.Errorf("Conn %d: Temp-Datei erstellen: %w", connID, err)
+				return
+			}
+			defer out.Close()
+
+			// Download mit Progress-Tracking
+			buf := make([]byte, 64*1024) // 64KB Buffer
+			for {
+				n, err := resp.Body.Read(buf)
+				if n > 0 {
+					out.Write(buf[:n])
+
+					// Progress aktualisieren
+					progressMu.Lock()
+					chunkProgress[connID] += int64(n)
+					progressMu.Unlock()
+				}
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					errChan <- fmt.Errorf("Conn %d: Lesen: %w", connID, err)
+					return
+				}
+			}
+		}(i)
+	}
+
+	// Progress-Reporter in separater Goroutine
+	done := make(chan bool)
+	go func() {
+		ticker := time.NewTicker(200 * time.Millisecond)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				progressMu.Lock()
+				var totalDownloaded int64
+				for _, p := range chunkProgress {
+					totalDownloaded += p
+				}
+				progressMu.Unlock()
+
+				elapsed := time.Since(startTime).Seconds()
+				speed := float64(totalDownloaded) / elapsed / (1024 * 1024)
+				percent := float64(totalDownloaded) / float64(totalSize) * 100
+
+				if progressChan != nil {
+					progressChan <- DownloadProgress{
+						Component:  component,
+						File:       file,
+						TotalBytes: totalSize,
+						Downloaded: totalDownloaded,
+						Percent:    percent,
+						Speed:      speed,
+						Status:     fmt.Sprintf("multi (%dx)", numConnections),
+					}
+				}
+			}
+		}
+	}()
+
+	// Warten bis alle Downloads fertig sind
+	wg.Wait()
+	close(done)
+	close(errChan)
+
+	// Fehler prüfen
+	for err := range errChan {
+		// Cleanup bei Fehler
+		for _, tf := range tempFiles {
+			os.Remove(tf)
+		}
+		return err
+	}
+
+	// Chunks zusammenfügen
+	log.Printf("[%s] Füge %d Chunks zusammen...", component, numConnections)
+	outFile, err := os.Create(destPath)
+	if err != nil {
+		return fmt.Errorf("Zieldatei erstellen: %w", err)
+	}
+	defer outFile.Close()
+
+	for i, tf := range tempFiles {
+		chunk, err := os.Open(tf)
+		if err != nil {
+			return fmt.Errorf("Chunk %d öffnen: %w", i, err)
+		}
+
+		_, err = io.Copy(outFile, chunk)
+		chunk.Close()
+		if err != nil {
+			return fmt.Errorf("Chunk %d kopieren: %w", i, err)
+		}
+
+		// Temp-Datei löschen
+		os.Remove(tf)
+	}
+
+	// Finale Progress-Meldung
+	elapsed := time.Since(startTime).Seconds()
+	avgSpeed := float64(totalSize) / elapsed / (1024 * 1024)
+	log.Printf("[%s] Multi-Connection Download abgeschlossen: %.1f MB in %.1fs (%.1f MB/s)",
+		component, float64(totalSize)/(1024*1024), elapsed, avgSpeed)
+
+	if progressChan != nil {
+		progressChan <- DownloadProgress{
+			Component:  component,
+			File:       file,
+			TotalBytes: totalSize,
+			Downloaded: totalSize,
+			Percent:    100,
+			Speed:      avgSpeed,
+			Status:     "done",
 		}
 	}
 

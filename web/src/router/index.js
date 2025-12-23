@@ -3,6 +3,13 @@ import MainLayout from '../components/layout/MainLayout.vue'
 import { useAuthStore } from '../stores/authStore'
 
 const routes = [
+  // Help pages (public - accessible during setup)
+  {
+    path: '/help',
+    name: 'help',
+    component: () => import('../views/HelpView.vue'),
+    meta: { title: 'Hilfe - Fleet Navigator', public: true }
+  },
   // Login page (public)
   {
     path: '/login',

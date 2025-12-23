@@ -818,14 +818,16 @@ const stepEmojis = ['🤖', '🔧', '⚙️', '👤', '📚', '✅']
 
 // Verfügbare TTS Stimmen
 const availableVoices = [
-  { id: 'de_DE-thorsten-medium', name: 'Thorsten', description: 'Männlich, neutral', gender: 'male' },
-  { id: 'de_DE-thorsten-high', name: 'Thorsten HD', description: 'Männlich, hohe Qualität', gender: 'male' },
+  // Empfohlene Stimmen zuerst
+  { id: 'de_DE-kerstin-low', name: 'Kerstin', description: 'Weiblich, klar ⭐', gender: 'female' },
+  { id: 'de_DE-thorsten-high', name: 'Thorsten HD', description: 'Männlich, beste Qualität ⭐', gender: 'male' },
+  // Weitere Stimmen
   { id: 'de_DE-thorsten_emotional-medium', name: 'Thorsten Emotional', description: 'Männlich, expressiv', gender: 'male' },
-  { id: 'de_DE-eva_k-x_low', name: 'Eva K', description: 'Weiblich', gender: 'female' },
-  { id: 'de_DE-kerstin-low', name: 'Kerstin', description: 'Weiblich, klar', gender: 'female' },
   { id: 'de_DE-ramona-low', name: 'Ramona', description: 'Weiblich, warm', gender: 'female' },
   { id: 'de_DE-karlsson-low', name: 'Karlsson', description: 'Männlich, tief', gender: 'male' },
   { id: 'de_DE-pavoque-low', name: 'Pavoque', description: 'Männlich, professionell', gender: 'male' },
+  { id: 'de_DE-thorsten-medium', name: 'Thorsten', description: 'Männlich, neutral', gender: 'male' },
+  { id: 'de_DE-eva_k-x_low', name: 'Eva K', description: 'Weiblich, kompakt', gender: 'female' },
 ]
 
 // Wizard Data

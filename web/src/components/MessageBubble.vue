@@ -88,7 +88,7 @@
 
           <!-- TTS Speaker Button (only for AI messages) -->
           <button
-            v-if="!isUser && !message.isStreaming"
+            v-if="!isUser && !message.isStreaming && ttsEnabled"
             @click="toggleSpeech"
             class="
               p-1.5 rounded-lg
@@ -339,6 +339,12 @@ const isExporting = ref(false)
 const isSpeaking = ref(false)
 const isLoadingTTS = ref(false)
 let currentAudio = null
+
+// TTS Enabled (from localStorage for quick access)
+const ttsEnabled = computed(() => {
+  const stored = localStorage.getItem('ttsEnabled')
+  return stored === null || stored === 'true' // Default: enabled
+})
 
 // Get expert name for display (full name like "Roland Navarro")
 // Priority: 1. Chat's expertId (persisted), 2. Currently selected expert

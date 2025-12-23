@@ -1289,5 +1289,62 @@ export default {
     }
 
     return eventSource
+  },
+
+  // ===== Voice Assistant (Wake Word / Always-On) =====
+
+  /**
+   * Gibt den Status des Voice Assistants zurück
+   * @returns {Promise<{running: boolean, state: string, wakeWordEnabled: boolean, quietHoursActive: boolean}>}
+   */
+  async getVoiceAssistantStatus() {
+    const response = await api.get('/voice-assistant/status')
+    return response.data
+  },
+
+  /**
+   * Startet den Voice Assistant (Always-On Modus)
+   * @returns {Promise<{success: boolean, message: string}>}
+   */
+  async startVoiceAssistant() {
+    const response = await api.post('/voice-assistant/start')
+    return response.data
+  },
+
+  /**
+   * Stoppt den Voice Assistant
+   * @returns {Promise<{success: boolean, message: string}>}
+   */
+  async stopVoiceAssistant() {
+    const response = await api.post('/voice-assistant/stop')
+    return response.data
+  },
+
+  /**
+   * Gibt die Voice Assistant Einstellungen zurück
+   * @returns {Promise<{enabled: boolean, wakeWord: string, autoStop: boolean, quietHoursEnabled: boolean, quietHoursStart: string, quietHoursEnd: string}>}
+   */
+  async getVoiceAssistantSettings() {
+    const response = await api.get('/voice-assistant/settings')
+    return response.data
+  },
+
+  /**
+   * Speichert die Voice Assistant Einstellungen
+   * @param {Object} settings - Voice Assistant Einstellungen
+   * @returns {Promise<{success: boolean}>}
+   */
+  async saveVoiceAssistantSettings(settings) {
+    const response = await api.post('/voice-assistant/settings', settings)
+    return response.data
+  },
+
+  /**
+   * Gibt verfügbare Audio-Eingabegeräte zurück
+   * @returns {Promise<Array<{id: string, name: string, isDefault: boolean}>>}
+   */
+  async getVoiceAssistantDevices() {
+    const response = await api.get('/voice-assistant/devices')
+    return response.data
   }
 }

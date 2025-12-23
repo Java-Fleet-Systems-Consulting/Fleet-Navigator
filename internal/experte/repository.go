@@ -563,5 +563,46 @@ func (r *Repository) SeedDefaultExperts() error {
 		log.Printf("Seeding: %d fehlende Standard-Experten hinzugefügt", addedCount)
 	}
 
+	// Stimmen für existierende Experten aktualisieren (falls leer)
+	if err := r.UpdateMissingVoices(); err != nil {
+		log.Printf("Warnung: Stimmen-Update fehlgeschlagen: %v", err)
+	}
+
+	return nil
+}
+
+// UpdateMissingVoices aktualisiert die Voice-Felder für existierende Experten ohne Stimme
+func (r *Repository) UpdateMissingVoices() error {
+	defaults := DefaultExperts()
+	updatedCount := 0
+
+	for _, defaultExpert := range defaults {
+		if defaultExpert.Voice == "" {
+			continue
+		}
+
+		// Update nur wenn Voice leer ist
+		result, err := r.db.Exec(`
+			UPDATE experts
+			SET voice = ?
+			WHERE name = ? AND (voice IS NULL OR voice = '')
+		`, defaultExpert.Voice, defaultExpert.Name)
+
+		if err != nil {
+			log.Printf("Warnung: Voice-Update für '%s' fehlgeschlagen: %v", defaultExpert.Name, err)
+			continue
+		}
+
+		affected, _ := result.RowsAffected()
+		if affected > 0 {
+			updatedCount++
+			log.Printf("Voice aktualisiert: %s → %s", defaultExpert.Name, defaultExpert.Voice)
+		}
+	}
+
+	if updatedCount > 0 {
+		log.Printf("Migration: %d Experten-Stimmen aktualisiert", updatedCount)
+	}
+
 	return nil
 }

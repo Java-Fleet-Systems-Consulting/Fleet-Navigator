@@ -203,6 +203,11 @@
                   <span>{{ $t('settings.hardware.cpuOnlyActive') }}</span>
                 </p>
               </div>
+
+              <!-- VRAM Settings (im Allgemein Tab) -->
+              <div class="mt-4">
+                <VRAMSettings />
+              </div>
             </div>
 
           </section>
@@ -439,11 +444,6 @@
             <ProviderSettings />
           </div>
 
-          <!-- TAB: GPU/VRAM Settings -->
-          <div v-if="activeTab === 'gpu'">
-            <VRAMSettings />
-          </div>
-
           <!-- TAB: Database (PostgreSQL + Vector DB) -->
           <div v-if="activeTab === 'database'">
             <PostgreSQLMigration @status-change="onPostgresStatusChange" />
@@ -549,6 +549,11 @@
           <!-- TAB: Personal Info -->
           <div v-if="activeTab === 'personal'">
             <PersonalInfoTab ref="personalInfoTabRef" />
+          </div>
+
+          <!-- TAB: Observer (Finanz- und Wirtschaftsdaten) -->
+          <div v-if="activeTab === 'observer'">
+            <ObserverSettings />
           </div>
 
           <!-- TAB: Agents -->
@@ -1059,6 +1064,73 @@
                   </div>
                 </div>
 
+                <!-- Animation Selector -->
+                <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <div class="flex items-center justify-between">
+                    <div class="flex-1">
+                      <label class="font-medium text-gray-700 dark:text-gray-200 text-sm flex items-center gap-2">
+                        🎨 Lade-Animation
+                      </label>
+                      <p class="text-xs text-gray-500 dark:text-gray-400">Animation während der Web-Suche</p>
+                    </div>
+                    <select
+                      v-model="webSearchSettings.webSearchAnimation"
+                      @change="saveWebSearchSettings"
+                      class="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option v-for="opt in animationOptions" :key="opt.value" :value="opt.value">
+                        {{ opt.label }}
+                      </option>
+                    </select>
+                  </div>
+                  <!-- Animation Preview -->
+                  <div class="mt-3 p-3 rounded-lg bg-gray-900/80 border border-gray-700">
+                    <p class="text-xs text-gray-400 mb-2">Vorschau:</p>
+                    <div class="flex items-center gap-3">
+                      <div class="p-2 rounded-lg bg-gradient-to-br from-cyan-500 via-blue-500 to-purple-600 shadow-lg">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                        </svg>
+                      </div>
+                      <div class="flex-1">
+                        <!-- Data Wave Preview -->
+                        <div v-if="webSearchSettings.webSearchAnimation === 'data-wave'" class="h-8 relative overflow-hidden rounded-lg bg-gradient-to-r from-cyan-500/10 via-blue-500/15 to-purple-500/10 border border-blue-500/20">
+                          <div class="absolute inset-0 flex items-center">
+                            <div class="w-full h-0.5 bg-gradient-to-r from-transparent via-blue-500 to-transparent animate-pulse"></div>
+                          </div>
+                          <div class="absolute inset-0 flex items-center justify-around">
+                            <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>
+                            <span class="w-2 h-2 rounded-full bg-blue-500 animate-ping" style="animation-delay: 0.3s"></span>
+                            <span class="w-1.5 h-1.5 rounded-full bg-purple-400 animate-ping" style="animation-delay: 0.6s"></span>
+                          </div>
+                        </div>
+                        <!-- Orbit Preview -->
+                        <div v-else-if="webSearchSettings.webSearchAnimation === 'orbit'" class="h-8 relative overflow-hidden rounded-lg bg-gradient-to-r from-blue-500/10 to-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+                          <div class="w-6 h-6 rounded-full border-2 border-indigo-400/50 relative">
+                            <span class="absolute w-2 h-2 rounded-full bg-indigo-500 animate-spin" style="animation-duration: 1.5s; top: -4px; left: 50%; transform: translateX(-50%);"></span>
+                          </div>
+                        </div>
+                        <!-- Radar Preview -->
+                        <div v-else-if="webSearchSettings.webSearchAnimation === 'radar'" class="h-8 relative overflow-hidden rounded-lg bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/20 flex items-center justify-center">
+                          <div class="w-6 h-6 rounded-full border border-green-500/30 flex items-center justify-center">
+                            <div class="w-4 h-4 rounded-full border border-green-400/50 animate-ping"></div>
+                          </div>
+                        </div>
+                        <!-- Constellation Preview -->
+                        <div v-else-if="webSearchSettings.webSearchAnimation === 'constellation'" class="h-8 relative overflow-hidden rounded-lg bg-gradient-to-r from-violet-500/10 to-pink-500/10 border border-violet-500/20">
+                          <div class="absolute inset-0 flex items-center justify-around">
+                            <span class="w-1 h-1 rounded-full bg-violet-400 animate-pulse"></span>
+                            <span class="w-1.5 h-1.5 rounded-full bg-pink-400 animate-pulse" style="animation-delay: 0.2s"></span>
+                            <span class="w-1 h-1 rounded-full bg-violet-300 animate-pulse" style="animation-delay: 0.4s"></span>
+                            <span class="w-2 h-2 rounded-full bg-pink-500 animate-pulse" style="animation-delay: 0.1s"></span>
+                            <span class="w-1 h-1 rounded-full bg-violet-400 animate-pulse" style="animation-delay: 0.3s"></span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <!-- Info -->
                 <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                   <p class="text-xs text-gray-500 dark:text-gray-400">
@@ -1089,6 +1161,33 @@
                 <MicrophoneIcon class="w-5 h-5 text-purple-500" />
                 {{ $t('settings.voice.title') }}
               </h3>
+
+              <!-- TTS Global Toggle -->
+              <div class="mb-4 p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <SpeakerWaveIcon class="w-5 h-5 text-indigo-500" />
+                    <div>
+                      <span class="font-semibold text-gray-900 dark:text-white">{{ $t('settings.voice.ttsEnabled') }}</span>
+                      <p class="text-xs text-gray-500 dark:text-gray-400">{{ $t('settings.voice.ttsEnabledDesc') }}</p>
+                    </div>
+                  </div>
+                  <button
+                    @click="toggleTtsEnabled"
+                    :class="[
+                      'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+                      ttsEnabled ? 'bg-indigo-500' : 'bg-gray-300 dark:bg-gray-600'
+                    ]"
+                  >
+                    <span
+                      :class="[
+                        'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
+                        ttsEnabled ? 'translate-x-6' : 'translate-x-1'
+                      ]"
+                    />
+                  </button>
+                </div>
+              </div>
 
               <!-- Download Progress (global) -->
               <div v-if="voiceDownloading" class="mb-4 p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
@@ -1332,6 +1431,144 @@
               <div class="mt-4 p-3 rounded-lg bg-gray-100 dark:bg-gray-800 text-sm text-gray-600 dark:text-gray-400">
                 <p><strong>{{ $t('common.note') }}:</strong> {{ $t('settings.voice.voiceStorageInfo') }}</p>
                 <p class="mt-1">{{ $t('settings.voice.clickToTest') }}</p>
+              </div>
+            </section>
+
+            <!-- Voice Assistant / Wakeword Section -->
+            <section class="mt-6 bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-900/30 dark:to-emerald-800/30 p-5 rounded-xl border border-green-200/50 dark:border-green-700/50 shadow-sm">
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <span class="text-2xl">🎙️</span>
+                Voice Assistant (Ewa)
+              </h3>
+
+              <!-- Voice Assistant Enable/Disable -->
+              <div class="mb-4 p-4 rounded-xl border border-green-200 dark:border-green-700 bg-white dark:bg-gray-800">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <span class="text-xl">{{ voiceAssistantSettings.enabled ? '🟢' : '⚪' }}</span>
+                    <div>
+                      <span class="font-semibold text-gray-900 dark:text-white">Voice Assistant aktivieren</span>
+                      <p class="text-xs text-gray-500 dark:text-gray-400">Sprachsteuerung per Wake Word</p>
+                    </div>
+                  </div>
+                  <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" v-model="voiceAssistantSettings.enabled" @change="saveVoiceAssistantSettings" class="sr-only peer">
+                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 dark:peer-focus:ring-green-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-500 peer-checked:bg-green-500"></div>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Wake Word Selection (nur wenn aktiviert) -->
+              <div v-if="voiceAssistantSettings.enabled" class="space-y-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    🗣️ Wake Word auswählen
+                  </label>
+                  <div class="grid grid-cols-3 gap-3">
+                    <button
+                      @click="voiceAssistantSettings.wakeWord = 'hey_ewa'; saveVoiceAssistantSettings()"
+                      :class="[
+                        'p-3 rounded-lg border-2 transition-all text-center',
+                        voiceAssistantSettings.wakeWord === 'hey_ewa'
+                          ? 'border-green-500 bg-green-500/10'
+                          : 'border-gray-300 dark:border-gray-600 hover:border-green-400'
+                      ]"
+                    >
+                      <span class="block font-medium text-gray-900 dark:text-white">"Hey Ewa"</span>
+                      <span class="text-xs text-gray-500 dark:text-gray-400">Standard</span>
+                    </button>
+                    <button
+                      @click="voiceAssistantSettings.wakeWord = 'ewa'; saveVoiceAssistantSettings()"
+                      :class="[
+                        'p-3 rounded-lg border-2 transition-all text-center',
+                        voiceAssistantSettings.wakeWord === 'ewa'
+                          ? 'border-green-500 bg-green-500/10'
+                          : 'border-gray-300 dark:border-gray-600 hover:border-green-400'
+                      ]"
+                    >
+                      <span class="block font-medium text-gray-900 dark:text-white">"Ewa"</span>
+                      <span class="text-xs text-gray-500 dark:text-gray-400">Kurz</span>
+                    </button>
+                    <button
+                      @click="voiceAssistantSettings.wakeWord = 'custom'; saveVoiceAssistantSettings()"
+                      :class="[
+                        'p-3 rounded-lg border-2 transition-all text-center',
+                        voiceAssistantSettings.wakeWord === 'custom'
+                          ? 'border-green-500 bg-green-500/10'
+                          : 'border-gray-300 dark:border-gray-600 hover:border-green-400'
+                      ]"
+                    >
+                      <span class="block font-medium text-gray-900 dark:text-white">Eigenes</span>
+                      <span class="text-xs text-gray-500 dark:text-gray-400">Benutzerdefiniert</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Custom Wake Word Input -->
+                <div v-if="voiceAssistantSettings.wakeWord === 'custom'">
+                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Eigenes Wake Word
+                  </label>
+                  <input
+                    v-model="voiceAssistantSettings.customWakeWord"
+                    type="text"
+                    placeholder="z.B. 'Computer', 'Jarvis', ..."
+                    class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    @change="saveVoiceAssistantSettings"
+                  >
+                </div>
+
+                <!-- Auto-Stop Toggle -->
+                <div class="p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <label class="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                        ⏹️ Auto-Stopp nach Antwort
+                      </label>
+                      <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Beendet Lauschen nach einer vollständigen Antwort
+                      </p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" v-model="voiceAssistantSettings.autoStop" @change="saveVoiceAssistantSettings" class="sr-only peer">
+                      <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 dark:peer-focus:ring-green-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-green-600"></div>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Ruhezeiten -->
+                <div class="p-4 rounded-xl border border-blue-200 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-900/20">
+                  <div class="flex items-center justify-between mb-3">
+                    <div>
+                      <label class="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                        🌙 Ruhezeiten
+                      </label>
+                      <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Voice Assistant pausiert während dieser Zeit
+                      </p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" v-model="voiceAssistantSettings.quietHoursEnabled" @change="saveVoiceAssistantSettings" class="sr-only peer">
+                      <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+                  <div v-if="voiceAssistantSettings.quietHoursEnabled" class="flex items-center gap-2">
+                    <input type="time" v-model="voiceAssistantSettings.quietHoursStart" @change="saveVoiceAssistantSettings" class="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm">
+                    <span class="text-gray-500">bis</span>
+                    <input type="time" v-model="voiceAssistantSettings.quietHoursEnd" @change="saveVoiceAssistantSettings" class="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm">
+                  </div>
+                </div>
+
+                <!-- Anleitung -->
+                <div class="p-4 bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 border border-green-200 dark:border-green-700 rounded-lg">
+                  <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">💡 So funktioniert's</h4>
+                  <ul class="space-y-1 text-xs text-gray-600 dark:text-gray-400">
+                    <li>1. Sage <strong>"{{ getWakeWordDisplay(voiceAssistantSettings.wakeWord) }}"</strong> um Ewa zu aktivieren</li>
+                    <li>2. Stelle deine Frage oder gib einen Befehl</li>
+                    <li>3. Ewa antwortet per Sprache (TTS)</li>
+                    <li>4. Wiederhole oder sage "Stop" zum Beenden</li>
+                  </ul>
+                </div>
               </div>
             </section>
           </div>
@@ -1643,7 +1880,8 @@ import {
   SpeakerWaveIcon,
   ArrowDownTrayIcon,
   ArrowsRightLeftIcon,
-  LightBulbIcon
+  LightBulbIcon,
+  ChartBarIcon
 } from '@heroicons/vue/24/outline'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useChatStore } from '../stores/chatStore'
@@ -1659,6 +1897,7 @@ import SimpleSamplingParams from './SimpleSamplingParams.vue'
 import VRAMSettings from './settings/VRAMSettings.vue'
 import PostgreSQLMigration from './settings/PostgreSQLMigration.vue'
 import VoiceStore from './VoiceStore.vue'
+import ObserverSettings from './ObserverSettings.vue'
 import { filterVisionModels, filterCodeModels } from '../utils/modelFilters'
 
 const { success, error: errorToast } = useToast()
@@ -1716,6 +1955,7 @@ watch(activeTab, async (newTab, oldTab) => {
   if (newTab === 'voice') {
     await loadVoiceStatus()
     await loadVoiceModels()
+    await loadTtsSetting()
   }
 })
 
@@ -1854,11 +2094,11 @@ const tabs = [
   { id: 'general', label: 'Allgemein', icon: GlobeAltIcon },
   { id: 'mates', label: 'Fleet Mates', icon: UsersIcon },
   { id: 'providers', label: 'LLM Provider', icon: CpuChipIcon },
-  { id: 'gpu', label: 'GPU/VRAM', icon: CpuChipIcon },
   { id: 'database', label: 'Datenbank', icon: ServerIcon },
   { id: 'parameters', label: 'Parameter', icon: AdjustmentsHorizontalIcon },
   { id: 'templates', label: 'System-Prompts', icon: DocumentTextIcon },
   { id: 'personal', label: 'Persönliche Daten', icon: UserIcon },
+  { id: 'observer', label: 'Observer', icon: ChartBarIcon },
   { id: 'agents', label: 'Agents', icon: SparklesIcon },
   { id: 'web-search', label: 'Web-Suche', icon: MagnifyingGlassIcon },
   { id: 'voice', label: 'Sprache', icon: MicrophoneIcon },
@@ -1930,8 +2170,18 @@ const webSearchSettings = ref({
   multiQueryEnabled: false,
   reRankingEnabled: true,
   queryOptimizationModel: 'llama3.2:3b',
-  effectiveOptimizationModel: null  // Das tatsächlich verwendete Modell (nach Fallback)
+  effectiveOptimizationModel: null,  // Das tatsächlich verwendete Modell (nach Fallback)
+  // UI Animation
+  webSearchAnimation: 'data-wave'  // Animation: data-wave, orbit, radar, constellation
 })
+
+// Animation Options für Dropdown
+const animationOptions = [
+  { value: 'data-wave', label: '🌊 Data Wave', description: 'Fließende Datenwelle' },
+  { value: 'orbit', label: '🌐 Orbiting Network', description: 'Kreisende Datenpunkte' },
+  { value: 'radar', label: '📡 Radar Scan', description: 'Radar-Scanning-Effekt' },
+  { value: 'constellation', label: '✨ Constellation', description: 'Sternbild-Netzwerk' }
+]
 
 // Voice Settings (STT/TTS)
 const voiceStatus = ref({
@@ -1953,9 +2203,98 @@ const voiceDownloadStatus = ref('')
 const voiceDownloadProgress = ref(0)
 const voiceDownloadSpeed = ref('')
 const piperLanguageFilter = ref('de')
+const ttsEnabled = ref(true)
+
+// Voice Assistant Settings
+const voiceAssistantSettings = ref({
+  enabled: false,
+  wakeWord: 'hey_ewa',
+  customWakeWord: '',
+  autoStop: true,
+  quietHoursEnabled: false,
+  quietHoursStart: '22:00',
+  quietHoursEnd: '07:00'
+})
 
 // VoiceStore ref
 const voiceStoreRef = ref(null)
+
+// TTS Toggle
+async function toggleTtsEnabled() {
+  ttsEnabled.value = !ttsEnabled.value
+  try {
+    await api.updateSettings({ ttsEnabled: ttsEnabled.value })
+    // Auch im localStorage für schnellen Zugriff
+    localStorage.setItem('ttsEnabled', String(ttsEnabled.value))
+  } catch (err) {
+    console.error('Failed to save TTS setting:', err)
+  }
+}
+
+// Load TTS setting on mount
+async function loadTtsSetting() {
+  // Erst localStorage prüfen für schnellen Start
+  const stored = localStorage.getItem('ttsEnabled')
+  if (stored !== null) {
+    ttsEnabled.value = stored === 'true'
+  }
+  // Dann vom Backend laden
+  try {
+    const settings = await api.getSettings()
+    if (settings?.ttsEnabled !== undefined) {
+      ttsEnabled.value = settings.ttsEnabled
+      localStorage.setItem('ttsEnabled', String(ttsEnabled.value))
+    }
+  } catch (err) {
+    console.error('Failed to load TTS setting:', err)
+  }
+}
+
+// Voice Assistant Functions
+async function loadVoiceAssistantSettings() {
+  try {
+    const response = await fetch('/api/voice-assistant/settings')
+    if (response.ok) {
+      const data = await response.json()
+      voiceAssistantSettings.value = {
+        enabled: data.enabled ?? false,
+        wakeWord: data.wakeWord ?? 'hey_ewa',
+        customWakeWord: data.customWakeWord ?? '',
+        autoStop: data.autoStop ?? true,
+        quietHoursEnabled: data.quietHoursEnabled ?? false,
+        quietHoursStart: data.quietHoursStart ?? '22:00',
+        quietHoursEnd: data.quietHoursEnd ?? '07:00'
+      }
+    }
+  } catch (err) {
+    console.error('Failed to load voice assistant settings:', err)
+  }
+}
+
+async function saveVoiceAssistantSettings() {
+  try {
+    await fetch('/api/voice-assistant/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(voiceAssistantSettings.value)
+    })
+  } catch (err) {
+    console.error('Failed to save voice assistant settings:', err)
+  }
+}
+
+function getWakeWordDisplay(wakeWord) {
+  switch (wakeWord) {
+    case 'hey_ewa':
+      return 'Hey Ewa'
+    case 'ewa':
+      return 'Ewa'
+    case 'custom':
+      return voiceAssistantSettings.value.customWakeWord || 'Eigenes Wake Word'
+    default:
+      return 'Hey Ewa'
+  }
+}
 
 // Download custom voice from HuggingFace
 async function downloadCustomVoice() {
@@ -2331,6 +2670,7 @@ onMounted(async () => {
   await loadWebSearchSettings()
   await loadShowWelcomeTiles()
   await loadFileSearchStatus()
+  await loadVoiceAssistantSettings()
 })
 
 async function loadShowWelcomeTiles() {
@@ -2875,7 +3215,9 @@ async function loadWebSearchSettings() {
         multiQueryEnabled: data.multiQueryEnabled ?? false,
         reRankingEnabled: data.reRankingEnabled ?? true,
         queryOptimizationModel: data.queryOptimizationModel || 'llama3.2:3b',
-        effectiveOptimizationModel: data.effectiveOptimizationModel || null
+        effectiveOptimizationModel: data.effectiveOptimizationModel || null,
+        // UI Animation
+        webSearchAnimation: data.webSearchAnimation || 'data-wave'
       }
     }
   } catch (error) {
@@ -2899,7 +3241,9 @@ async function saveWebSearchSettings() {
         contentScrapingEnabled: webSearchSettings.value.contentScrapingEnabled,
         multiQueryEnabled: webSearchSettings.value.multiQueryEnabled,
         reRankingEnabled: webSearchSettings.value.reRankingEnabled,
-        queryOptimizationModel: webSearchSettings.value.queryOptimizationModel
+        queryOptimizationModel: webSearchSettings.value.queryOptimizationModel,
+        // UI Animation
+        webSearchAnimation: webSearchSettings.value.webSearchAnimation
       })
     })
     if (!response.ok) {

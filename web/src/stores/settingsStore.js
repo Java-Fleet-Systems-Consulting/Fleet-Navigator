@@ -32,6 +32,7 @@ const defaultSettings = {
   showWelcomeTiles: false,  // Show suggestion tiles - loaded from DB (default: false until DB confirms)
   showTopBar: false,  // TopBar ein-/ausblenden (Default: aus für professionelle Ansicht)
   showModeSwitchMessages: true,  // Modus-Wechsel-Nachrichten anzeigen (z.B. "Roland wechselt zu Verkehrsrecht")
+  webSearchAnimation: 'data-wave',  // Web-Suche Animation: data-wave, orbit, radar, constellation
 
   // Model Settings
   markdownEnabled: true,  // Markdown-Formatierung in Antworten
@@ -45,7 +46,7 @@ const defaultSettings = {
 
   // Vision
   autoSelectVisionModel: true,
-  preferredVisionModel: 'llava:7b',  // Default: llava:7b (schnell und effizient)
+  preferredVisionModel: 'MiniCPM-V-2.6',  // Default: MiniCPM-V (beste OCR & Dokumentenerkennung)
   visionChainEnabled: true,  // Vision Model Output an Haupt-Model weiterreichen
 
   // Hardware/Performance
@@ -374,6 +375,22 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
+  // Load Web Search Animation from backend
+  async function loadWebSearchAnimationFromBackend() {
+    try {
+      const response = await fetch('/api/search/settings')
+      if (response.ok) {
+        const data = await response.json()
+        if (data.webSearchAnimation) {
+          settings.value.webSearchAnimation = data.webSearchAnimation
+          console.log('✅ Web Search Animation loaded from backend:', data.webSearchAnimation)
+        }
+      }
+    } catch (e) {
+      console.warn('⚠️ Could not load web search animation from backend:', e.message)
+    }
+  }
+
   // Initialize: load ALL important settings from backend (DB = Source of Truth)
   async function initFromBackend() {
     console.log('🔄 Initialisiere Settings vom Backend...')
@@ -383,7 +400,8 @@ export const useSettingsStore = defineStore('settings', () => {
       loadUiThemeFromBackend(),
       loadSamplingParamsFromBackend(),
       loadChainingSettingsFromBackend(),
-      loadUserPreferencesFromBackend()
+      loadUserPreferencesFromBackend(),
+      loadWebSearchAnimationFromBackend()
     ])
     console.log('✅ Alle Settings vom Backend geladen')
   }
@@ -413,6 +431,7 @@ export const useSettingsStore = defineStore('settings', () => {
     saveChainingSettingsToBackend,
     loadUserPreferencesFromBackend,
     saveUserPreferencesToBackend,
+    loadWebSearchAnimationFromBackend,
     initFromBackend
   }
 })

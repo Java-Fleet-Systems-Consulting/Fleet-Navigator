@@ -866,6 +866,28 @@ export const useChatStore = defineStore('chat', () => {
                       error.value = parsed.error || 'Model-Swap fehlgeschlagen'
                       break
                   }
+                } else if (parsed.type === 'delegation') {
+                  // Ewa delegiert an anderen Experten
+                  console.log('[SSE] Delegation:', parsed.expertName, 'ID:', parsed.expertId)
+
+                  // System-Nachricht für Delegation anzeigen
+                  const delegationMsg = {
+                    role: 'SYSTEM',
+                    content: `🔄 ${parsed.message || `Delegation an ${parsed.expertName}`}`,
+                    createdAt: new Date().toISOString(),
+                    isDelegationMessage: true,
+                    expertAvatar: parsed.expertAvatar
+                  }
+                  messages.value.push(delegationMsg)
+
+                  // Experten wechseln (nach kurzer Verzögerung für Animation)
+                  setTimeout(() => {
+                    if (parsed.expertId) {
+                      // Experten-ID setzen - dies triggert den Wechsel
+                      selectedExpertId.value = parsed.expertId
+                      console.log('[Delegation] Experte gewechselt zu:', parsed.expertName)
+                    }
+                  }, 500)
                 } else if (parsed.error) {
                   // Error event
                   console.error('Streaming error:', parsed.error)

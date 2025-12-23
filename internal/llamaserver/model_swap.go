@@ -334,6 +334,7 @@ func (m *ModelSwapManager) WithVisionModel(fn func() error) error {
 }
 
 // AutoDetectModels versucht, Modelle automatisch im ModelsDir zu finden
+// Durchsucht auch Unterverzeichnisse (library/, vision/, custom/)
 func (m *ModelSwapManager) AutoDetectModels(modelsDir string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -342,19 +343,35 @@ func (m *ModelSwapManager) AutoDetectModels(modelsDir string) {
 		return
 	}
 
-	files, err := os.ReadDir(modelsDir)
-	if err != nil {
-		log.Printf("⚠️ Konnte ModelsDir nicht lesen: %v", err)
-		return
+	// Sammle alle GGUF-Dateien aus modelsDir und Unterverzeichnissen
+	var ggufFiles []string
+
+	// Definiere Verzeichnisse die durchsucht werden sollen
+	searchDirs := []string{
+		modelsDir,
+		filepath.Join(modelsDir, "library"),
+		filepath.Join(modelsDir, "vision"),
+		filepath.Join(modelsDir, "custom"),
 	}
 
-	for _, file := range files {
-		if file.IsDir() || !strings.HasSuffix(strings.ToLower(file.Name()), ".gguf") {
-			continue
+	for _, dir := range searchDirs {
+		files, err := os.ReadDir(dir)
+		if err != nil {
+			continue // Verzeichnis existiert nicht - ignorieren
 		}
 
-		name := strings.ToLower(file.Name())
-		fullPath := filepath.Join(modelsDir, file.Name())
+		for _, file := range files {
+			if file.IsDir() || !strings.HasSuffix(strings.ToLower(file.Name()), ".gguf") {
+				continue
+			}
+			ggufFiles = append(ggufFiles, filepath.Join(dir, file.Name()))
+		}
+	}
+
+	log.Printf("🔍 AutoDetect: %d GGUF-Dateien gefunden", len(ggufFiles))
+
+	for _, fullPath := range ggufFiles {
+		name := strings.ToLower(filepath.Base(fullPath))
 
 		// Vision-Modell erkennen (LLaVA, MiniCPM, etc.)
 		// Aber NICHT mmproj-Dateien als Hauptmodell
@@ -362,7 +379,7 @@ func (m *ModelSwapManager) AutoDetectModels(modelsDir string) {
 			// mmproj für Vision merken
 			if m.visionMmprojPath == "" {
 				m.visionMmprojPath = fullPath
-				log.Printf("👁️ mmproj auto-detected: %s", file.Name())
+				log.Printf("👁️ mmproj auto-detected: %s", filepath.Base(fullPath))
 			}
 			continue
 		}
@@ -371,7 +388,7 @@ func (m *ModelSwapManager) AutoDetectModels(modelsDir string) {
 		   strings.Contains(name, "minicpm") {
 			if m.visionModelPath == "" {
 				m.visionModelPath = fullPath
-				log.Printf("👁️ Vision-Modell auto-detected: %s", file.Name())
+				log.Printf("👁️ Vision-Modell auto-detected: %s", filepath.Base(fullPath))
 			}
 			continue
 		}
@@ -380,7 +397,7 @@ func (m *ModelSwapManager) AutoDetectModels(modelsDir string) {
 		if strings.Contains(name, "coder") || strings.Contains(name, "deepseek-coder") {
 			if m.coderModelPath == "" {
 				m.coderModelPath = fullPath
-				log.Printf("💻 Coder-Modell auto-detected: %s", file.Name())
+				log.Printf("💻 Coder-Modell auto-detected: %s", filepath.Base(fullPath))
 			}
 			continue
 		}
@@ -391,21 +408,32 @@ func (m *ModelSwapManager) AutoDetectModels(modelsDir string) {
 			if strings.Contains(name, "qwen") || strings.Contains(name, "llama") ||
 			   strings.Contains(name, "mistral") || strings.Contains(name, "gemma") {
 				m.chatModelPath = fullPath
-				log.Printf("📝 Chat-Modell auto-detected: %s", file.Name())
+				log.Printf("📝 Chat-Modell auto-detected: %s", filepath.Base(fullPath))
 			}
 		}
 	}
 
-	// Fallback: Wenn kein Chat-Modell gefunden, nehme erstes GGUF
+	// Fallback: Wenn kein Chat-Modell gefunden, nehme erstes nicht-Vision GGUF
 	if m.chatModelPath == "" {
-		for _, file := range files {
-			if !file.IsDir() && strings.HasSuffix(strings.ToLower(file.Name()), ".gguf") &&
-			   !strings.Contains(strings.ToLower(file.Name()), "mmproj") {
-				m.chatModelPath = filepath.Join(modelsDir, file.Name())
-				log.Printf("📝 Chat-Modell (Fallback): %s", file.Name())
+		for _, fullPath := range ggufFiles {
+			name := strings.ToLower(filepath.Base(fullPath))
+			if !strings.Contains(name, "mmproj") &&
+			   !strings.Contains(name, "llava") &&
+			   !strings.Contains(name, "vision") {
+				m.chatModelPath = fullPath
+				log.Printf("📝 Chat-Modell (Fallback): %s", filepath.Base(fullPath))
 				break
 			}
 		}
+	}
+
+	// Log gefundene Modelle
+	if m.visionModelPath != "" && m.visionMmprojPath != "" {
+		log.Printf("✅ Vision-Modell komplett: %s + %s",
+			filepath.Base(m.visionModelPath), filepath.Base(m.visionMmprojPath))
+	} else if m.visionModelPath != "" {
+		log.Printf("⚠️ Vision-Modell ohne mmproj: %s (Vision wird nicht funktionieren!)",
+			filepath.Base(m.visionModelPath))
 	}
 }
 

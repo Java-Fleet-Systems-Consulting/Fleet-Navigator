@@ -101,6 +101,31 @@
 
         </div>
 
+        <!-- Learn While You Wait - Contextual Help Links -->
+        <div v-if="helpTopics.length > 0" class="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border-t border-indigo-100 dark:border-indigo-800 px-8 py-5">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="text-lg">💡</span>
+            <span class="font-semibold text-indigo-900 dark:text-indigo-100">
+              Während du wartest - lerne mehr:
+            </span>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <a
+              v-for="topic in helpTopics"
+              :key="topic.id"
+              :href="'/help?topic=' + topic.id"
+              target="_blank"
+              class="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 rounded-lg border border-indigo-200 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors text-sm font-medium"
+            >
+              <span>{{ topic.icon }}</span>
+              <span>{{ topic.label }}</span>
+              <svg class="w-3 h-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </a>
+          </div>
+        </div>
+
         <!-- Footer -->
         <div class="bg-gray-50 dark:bg-gray-900/50 px-8 py-5 flex justify-between items-center border-t border-gray-200 dark:border-gray-700">
           <div class="text-sm text-gray-500 dark:text-gray-400">
@@ -120,7 +145,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '../composables/useConfirmDialog'
 
@@ -155,6 +180,67 @@ const props = defineProps({
   statusMessages: {
     type: Array,
     default: () => []
+  },
+  downloadType: {
+    type: String,
+    default: 'llm',
+    validator: (value) => ['llm', 'llama-server', 'vision', 'whisper', 'piper'].includes(value)
+  }
+})
+
+// Contextual help topics based on what's being downloaded
+const helpTopics = computed(() => {
+  const topics = {
+    'llm': [
+      { id: 'instruct', icon: '🎯', label: 'Was ist ein Instruct-Modell?' },
+      { id: 'parameters', icon: '🔢', label: 'Was bedeutet 8B, 3B?' },
+      { id: 'context', icon: '📚', label: 'Was ist Context-Größe?' },
+      { id: 'local', icon: '💻', label: 'Lokal vs. Cloud (ChatGPT)' }
+    ],
+    'llama-server': [
+      { id: 'local', icon: '💻', label: 'Warum lokale KI?' },
+      { id: 'experts', icon: '👨‍💼', label: 'Fokussierte Experten' },
+      { id: 'parameters', icon: '🔢', label: 'Modellgrößen erklärt' }
+    ],
+    'vision': [
+      { id: 'vision', icon: '👁️', label: 'Was ist ein Vision-Modell?' },
+      { id: 'chaining', icon: '🔗', label: 'Vision Chaining erklärt' },
+      { id: 'local', icon: '💻', label: 'Privatsphäre bei Bildern' }
+    ],
+    'whisper': [
+      { id: 'voice', icon: '🎤', label: 'Whisper & Piper erklärt' },
+      { id: 'local', icon: '💻', label: 'Offline Spracherkennung' },
+      { id: 'experts', icon: '👨‍💼', label: 'Sprachsteuerung für Experten' }
+    ],
+    'piper': [
+      { id: 'voice', icon: '🔊', label: 'Text-zu-Sprache (TTS)' },
+      { id: 'experts', icon: '👨‍💼', label: 'Experten mit eigener Stimme' },
+      { id: 'local', icon: '💻', label: 'Offline Sprachausgabe' }
+    ]
+  }
+  return topics[props.downloadType] || topics['llm']
+})
+
+// Original page title (to restore later)
+let originalTitle = ''
+
+// Update browser tab title with progress
+watch(() => [props.isVisible, props.progress], ([visible, progress]) => {
+  if (visible) {
+    if (!originalTitle) {
+      originalTitle = document.title
+    }
+    document.title = `⬇️ ${progress}% - ${props.currentModel || 'Download'}`
+  } else if (originalTitle) {
+    document.title = originalTitle
+    originalTitle = ''
+  }
+}, { immediate: true })
+
+// Restore title on unmount
+onUnmounted(() => {
+  if (originalTitle) {
+    document.title = originalTitle
   }
 })
 

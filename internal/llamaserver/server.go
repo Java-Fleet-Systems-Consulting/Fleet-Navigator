@@ -825,6 +825,7 @@ func (s *Server) DownloadModel(url, filename string, progressChan chan<- Downloa
 	// WICHTIG: HuggingFace gibt 302 Redirect zurück, wir müssen der finalen URL folgen
 	var totalSize int64 = 0
 	var finalURL = url
+	var acceptRanges = "" // Für Multi-Connection Check
 
 	// Manuell Redirects folgen für HEAD-Requests
 	// (Go's http.Client folgt HEAD-Redirects nicht automatisch wie bei GET)
@@ -865,12 +866,13 @@ func (s *Server) DownloadModel(url, filename string, progressChan chan<- Downloa
 			continue
 		}
 
-		// Erfolg - Content-Length lesen
+		// Erfolg - Content-Length und Accept-Ranges lesen
 		if headResp.StatusCode == http.StatusOK {
 			totalSize = headResp.ContentLength
 			finalURL = currentURL
-			log.Printf("[HuggingFace] Finale URL: %s, Größe: %d bytes (%.2f MB)",
-				finalURL, totalSize, float64(totalSize)/1024/1024)
+			acceptRanges = headResp.Header.Get("Accept-Ranges")
+			log.Printf("[HuggingFace] Finale URL: %s, Größe: %d bytes (%.2f MB), Accept-Ranges: %s",
+				finalURL, totalSize, float64(totalSize)/1024/1024, acceptRanges)
 		}
 		break
 	}
@@ -918,6 +920,17 @@ func (s *Server) DownloadModel(url, filename string, progressChan chan<- Downloa
 				float64(totalSize)/1024/1024)
 		}
 	}
+
+	// Multi-Connection Download für große Dateien ohne Resume
+	// Bedingung: Keine Resume, > 100MB, Server unterstützt Range-Requests
+	const multiConnectionThreshold = 100 * 1024 * 1024 // 100 MB
+	if resumeOffset == 0 && totalSize > multiConnectionThreshold && acceptRanges == "bytes" {
+		log.Printf("[HuggingFace] Verwende Multi-Connection Download (8 Verbindungen) für %s", filename)
+		return s.downloadModelMulti(url, filename, totalSize, 8, progressChan)
+	}
+
+	// === Single-Connection Download (mit Resume-Support) ===
+	log.Printf("[HuggingFace] Single-Connection Download für %s", filename)
 
 	// HTTP Request mit optionalem Range-Header
 	req, err := http.NewRequest("GET", url, nil)
@@ -1049,7 +1062,226 @@ type DownloadProgress struct {
 	Total      int64   `json:"total"`
 	Percent    float64 `json:"percent"`
 	Filename   string  `json:"filename"`
-	Resumed    bool    `json:"resumed,omitempty"` // True wenn Download fortgesetzt wurde
+	Resumed    bool    `json:"resumed,omitempty"`    // True wenn Download fortgesetzt wurde
+	Speed      float64 `json:"speed,omitempty"`      // MB/s
+	Multi      bool    `json:"multi,omitempty"`      // True wenn Multi-Connection
+	Connections int    `json:"connections,omitempty"` // Anzahl parallele Verbindungen
+}
+
+// downloadModelMulti - Multi-Connection Download für große Dateien (8x schneller)
+func (s *Server) downloadModelMulti(url, filename string, totalSize int64, numConnections int, progressChan chan<- DownloadProgress) error {
+	destPath := filepath.Join(s.config.ModelsDir, filename)
+	tempDir := destPath + ".parts"
+
+	// Temp-Verzeichnis erstellen
+	if err := os.MkdirAll(tempDir, 0755); err != nil {
+		return fmt.Errorf("Temp-Verzeichnis erstellen: %w", err)
+	}
+
+	chunkSize := totalSize / int64(numConnections)
+	var wg sync.WaitGroup
+	var downloadErr error
+	var errMu sync.Mutex
+
+	// Progress-Tracking
+	downloaded := make([]int64, numConnections)
+	var progressMu sync.Mutex
+	startTime := time.Now()
+
+	log.Printf("[HuggingFace] Multi-Connection Download: %s mit %d Verbindungen (%.2f MB)",
+		filename, numConnections, float64(totalSize)/1024/1024)
+
+	// Progress-Reporter Goroutine
+	progressDone := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(500 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				progressMu.Lock()
+				var total int64
+				for _, d := range downloaded {
+					total += d
+				}
+				progressMu.Unlock()
+
+				elapsed := time.Since(startTime).Seconds()
+				speed := float64(total) / 1024 / 1024 / elapsed // MB/s
+
+				if progressChan != nil && totalSize > 0 {
+					percent := float64(total) / float64(totalSize) * 100
+					select {
+					case progressChan <- DownloadProgress{
+						Downloaded:  total,
+						Total:       totalSize,
+						Percent:     percent,
+						Filename:    filename,
+						Speed:       speed,
+						Multi:       true,
+						Connections: numConnections,
+					}:
+					default:
+					}
+				}
+			case <-progressDone:
+				return
+			}
+		}
+	}()
+
+	// Parallel Downloads starten
+	for i := 0; i < numConnections; i++ {
+		wg.Add(1)
+		go func(connID int) {
+			defer wg.Done()
+
+			start := int64(connID) * chunkSize
+			end := start + chunkSize - 1
+			if connID == numConnections-1 {
+				end = totalSize - 1 // Letzter Chunk bis zum Ende
+			}
+
+			partPath := filepath.Join(tempDir, fmt.Sprintf("part_%d", connID))
+
+			// HTTP Request mit Range-Header
+			req, err := http.NewRequest("GET", url, nil)
+			if err != nil {
+				errMu.Lock()
+				if downloadErr == nil {
+					downloadErr = fmt.Errorf("Request erstellen (Conn %d): %w", connID, err)
+				}
+				errMu.Unlock()
+				return
+			}
+			req.Header.Set("User-Agent", "Fleet-Navigator/0.7.0")
+			req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
+
+			client := &http.Client{Timeout: 0}
+			resp, err := client.Do(req)
+			if err != nil {
+				errMu.Lock()
+				if downloadErr == nil {
+					downloadErr = fmt.Errorf("Download starten (Conn %d): %w", connID, err)
+				}
+				errMu.Unlock()
+				return
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusPartialContent && resp.StatusCode != http.StatusOK {
+				errMu.Lock()
+				if downloadErr == nil {
+					downloadErr = fmt.Errorf("HTTP Fehler (Conn %d): %s", connID, resp.Status)
+				}
+				errMu.Unlock()
+				return
+			}
+
+			// Part-Datei erstellen
+			partFile, err := os.Create(partPath)
+			if err != nil {
+				errMu.Lock()
+				if downloadErr == nil {
+					downloadErr = fmt.Errorf("Part-Datei erstellen (Conn %d): %w", connID, err)
+				}
+				errMu.Unlock()
+				return
+			}
+			defer partFile.Close()
+
+			// Download mit Progress
+			buf := make([]byte, 64*1024)
+			for {
+				n, readErr := resp.Body.Read(buf)
+				if n > 0 {
+					_, writeErr := partFile.Write(buf[:n])
+					if writeErr != nil {
+						errMu.Lock()
+						if downloadErr == nil {
+							downloadErr = fmt.Errorf("Schreiben (Conn %d): %w", connID, writeErr)
+						}
+						errMu.Unlock()
+						return
+					}
+					progressMu.Lock()
+					downloaded[connID] += int64(n)
+					progressMu.Unlock()
+				}
+				if readErr == io.EOF {
+					break
+				}
+				if readErr != nil {
+					errMu.Lock()
+					if downloadErr == nil {
+						downloadErr = fmt.Errorf("Lesen (Conn %d): %w", connID, readErr)
+					}
+					errMu.Unlock()
+					return
+				}
+			}
+		}(i)
+	}
+
+	// Auf alle Downloads warten
+	wg.Wait()
+	close(progressDone)
+
+	if downloadErr != nil {
+		os.RemoveAll(tempDir)
+		return downloadErr
+	}
+
+	// Parts zusammenfügen
+	log.Printf("[HuggingFace] Füge %d Parts zusammen: %s", numConnections, filename)
+	outFile, err := os.Create(destPath)
+	if err != nil {
+		os.RemoveAll(tempDir)
+		return fmt.Errorf("Zieldatei erstellen: %w", err)
+	}
+
+	for i := 0; i < numConnections; i++ {
+		partPath := filepath.Join(tempDir, fmt.Sprintf("part_%d", i))
+		partFile, err := os.Open(partPath)
+		if err != nil {
+			outFile.Close()
+			os.Remove(destPath)
+			os.RemoveAll(tempDir)
+			return fmt.Errorf("Part-Datei öffnen: %w", err)
+		}
+		_, err = io.Copy(outFile, partFile)
+		partFile.Close()
+		if err != nil {
+			outFile.Close()
+			os.Remove(destPath)
+			os.RemoveAll(tempDir)
+			return fmt.Errorf("Part kopieren: %w", err)
+		}
+	}
+	outFile.Close()
+
+	// Aufräumen
+	os.RemoveAll(tempDir)
+
+	elapsed := time.Since(startTime).Seconds()
+	speed := float64(totalSize) / 1024 / 1024 / elapsed
+	log.Printf("[HuggingFace] ✅ Multi-Download abgeschlossen: %s (%.2f MB in %.1fs = %.1f MB/s)",
+		filename, float64(totalSize)/1024/1024, elapsed, speed)
+
+	// Finaler Progress
+	if progressChan != nil {
+		progressChan <- DownloadProgress{
+			Downloaded:  totalSize,
+			Total:       totalSize,
+			Percent:     100,
+			Filename:    filename,
+			Speed:       speed,
+			Multi:       true,
+			Connections: numConnections,
+		}
+	}
+
+	return nil
 }
 
 // RecommendedModels gibt empfohlene Modelle zum Download zurück

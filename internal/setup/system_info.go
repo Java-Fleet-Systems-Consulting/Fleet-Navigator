@@ -236,13 +236,14 @@ func getGPUInfoWindows() (hasGPU bool, gpuName string, gpuMemoryGB int64) {
 
 // isWhisperAvailable prüft ob Whisper auf dieser Plattform verfügbar ist
 func isWhisperAvailable() bool {
+	// Whisper kann auf allen Plattformen heruntergeladen werden (Mirror verfügbar)
 	switch runtime.GOOS {
 	case "linux":
-		return runtime.GOARCH == "amd64" // Eingebettet
+		return runtime.GOARCH == "amd64"
 	case "windows":
-		return false // Noch nicht eingebettet
+		return runtime.GOARCH == "amd64" // Via Download/Mirror verfügbar
 	case "darwin":
-		return false // Noch nicht eingebettet
+		return runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64"
 	}
 	return false
 }

@@ -329,9 +329,9 @@
         <!-- Enhanced Loading Indicator -->
         <div v-if="chatStore.isLoading" class="flex items-start gap-4 p-4">
           <div class="flex-shrink-0">
-            <!-- Spinning Globe for Web Search -->
-            <div v-if="chatStore.isWebSearching" class="p-3 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg">
-              <GlobeAltIcon class="w-6 h-6 text-white animate-spin-slow" />
+            <!-- Web Search: Data Wave Icon -->
+            <div v-if="chatStore.isWebSearching" class="web-search-icon p-3 rounded-2xl bg-gradient-to-br from-cyan-500 via-blue-500 to-purple-600 shadow-lg shadow-blue-500/30">
+              <GlobeAltIcon class="w-6 h-6 text-white" />
             </div>
             <!-- Normal CPU Icon for regular loading -->
             <div v-else class="p-3 rounded-2xl bg-gradient-to-br from-fleet-orange-500 to-fleet-orange-600 shadow-lg">
@@ -339,32 +339,96 @@
             </div>
           </div>
           <div class="flex-1">
-            <div class="flex items-center gap-2 mb-2">
-              <!-- Web Search Animation: Pulsing blue dots -->
-              <template v-if="chatStore.isWebSearching">
-                <div class="w-2.5 h-2.5 bg-blue-500 rounded-full animate-bounce"></div>
-                <div class="w-2.5 h-2.5 bg-blue-500 rounded-full animate-bounce" style="animation-delay: 0.15s"></div>
-                <div class="w-2.5 h-2.5 bg-blue-500 rounded-full animate-bounce" style="animation-delay: 0.3s"></div>
-                <span class="ml-2 text-blue-500 dark:text-blue-400 font-medium text-sm">
+            <!-- Web Search Animation (dynamisch basierend auf Setting) -->
+            <template v-if="chatStore.isWebSearching">
+              <div class="flex items-center gap-3 mb-3">
+                <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-500 font-semibold text-sm">
                   {{ loadingText }}
                 </span>
-              </template>
-              <!-- Normal Loading Animation: Orange dots -->
-              <template v-else>
+              </div>
+
+              <!-- Data Wave Animation -->
+              <div v-if="settingsStore.settings.webSearchAnimation === 'data-wave'" class="data-wave-container">
+                <div class="data-wave">
+                  <div class="wave-line"></div>
+                  <div class="data-particles">
+                    <span class="particle" style="--delay: 0s; --size: 4px;"></span>
+                    <span class="particle" style="--delay: 0.3s; --size: 6px;"></span>
+                    <span class="particle" style="--delay: 0.6s; --size: 3px;"></span>
+                    <span class="particle" style="--delay: 0.9s; --size: 5px;"></span>
+                    <span class="particle" style="--delay: 1.2s; --size: 4px;"></span>
+                    <span class="particle" style="--delay: 1.5s; --size: 7px;"></span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Orbit Animation -->
+              <div v-else-if="settingsStore.settings.webSearchAnimation === 'orbit'" class="orbit-container">
+                <div class="orbit-center">
+                  <div class="orbit-ring"></div>
+                  <div class="orbit-ring orbit-ring-2"></div>
+                  <div class="orbit-dot"></div>
+                  <div class="orbit-dot orbit-dot-2"></div>
+                  <div class="orbit-dot orbit-dot-3"></div>
+                </div>
+              </div>
+
+              <!-- Radar Animation -->
+              <div v-else-if="settingsStore.settings.webSearchAnimation === 'radar'" class="radar-container">
+                <div class="radar-sweep"></div>
+                <div class="radar-ring"></div>
+                <div class="radar-ring radar-ring-2"></div>
+                <div class="radar-ring radar-ring-3"></div>
+                <div class="radar-blip" style="--angle: 45deg; --distance: 30%;"></div>
+                <div class="radar-blip" style="--angle: 120deg; --distance: 60%;"></div>
+                <div class="radar-blip" style="--angle: 200deg; --distance: 45%;"></div>
+                <div class="radar-blip" style="--angle: 300deg; --distance: 70%;"></div>
+              </div>
+
+              <!-- Constellation Animation -->
+              <div v-else-if="settingsStore.settings.webSearchAnimation === 'constellation'" class="constellation-container">
+                <svg class="constellation-svg" viewBox="0 0 200 40">
+                  <line class="constellation-line" x1="20" y1="20" x2="60" y2="15" />
+                  <line class="constellation-line" x1="60" y1="15" x2="100" y2="25" />
+                  <line class="constellation-line" x1="100" y1="25" x2="140" y2="18" />
+                  <line class="constellation-line" x1="140" y1="18" x2="180" y2="22" />
+                  <circle class="constellation-star" cx="20" cy="20" r="3" style="--delay: 0s;" />
+                  <circle class="constellation-star" cx="60" cy="15" r="4" style="--delay: 0.2s;" />
+                  <circle class="constellation-star" cx="100" cy="25" r="3" style="--delay: 0.4s;" />
+                  <circle class="constellation-star" cx="140" cy="18" r="5" style="--delay: 0.6s;" />
+                  <circle class="constellation-star" cx="180" cy="22" r="3" style="--delay: 0.8s;" />
+                </svg>
+              </div>
+
+              <!-- Fallback (Data Wave) -->
+              <div v-else class="data-wave-container">
+                <div class="data-wave">
+                  <div class="wave-line"></div>
+                  <div class="data-particles">
+                    <span class="particle" style="--delay: 0s; --size: 4px;"></span>
+                    <span class="particle" style="--delay: 0.3s; --size: 6px;"></span>
+                    <span class="particle" style="--delay: 0.6s; --size: 3px;"></span>
+                  </div>
+                </div>
+              </div>
+            </template>
+            <!-- Normal Loading Animation: Orange dots -->
+            <template v-else>
+              <div class="flex items-center gap-2 mb-2">
                 <div class="w-2.5 h-2.5 bg-fleet-orange-500 rounded-full animate-bounce"></div>
                 <div class="w-2.5 h-2.5 bg-fleet-orange-500 rounded-full animate-bounce" style="animation-delay: 0.15s"></div>
                 <div class="w-2.5 h-2.5 bg-fleet-orange-500 rounded-full animate-bounce" style="animation-delay: 0.3s"></div>
                 <span class="ml-2 text-fleet-orange-500 dark:text-fleet-orange-400 font-medium text-sm">
                   {{ loadingText }}
                 </span>
-              </template>
-            </div>
-            <!-- Typing indicator bars -->
-            <div class="flex gap-1">
-              <div class="h-2 w-12 rounded-full animate-pulse" :class="chatStore.isWebSearching ? 'bg-blue-200 dark:bg-blue-800' : 'bg-gray-200 dark:bg-gray-700'"></div>
-              <div class="h-2 w-20 rounded-full animate-pulse" :class="chatStore.isWebSearching ? 'bg-blue-200 dark:bg-blue-800' : 'bg-gray-200 dark:bg-gray-700'" style="animation-delay: 0.1s"></div>
-              <div class="h-2 w-16 rounded-full animate-pulse" :class="chatStore.isWebSearching ? 'bg-blue-200 dark:bg-blue-800' : 'bg-gray-200 dark:bg-gray-700'" style="animation-delay: 0.2s"></div>
-            </div>
+              </div>
+              <!-- Typing indicator bars -->
+              <div class="flex gap-1">
+                <div class="h-2 w-12 rounded-full animate-pulse bg-gray-200 dark:bg-gray-700"></div>
+                <div class="h-2 w-20 rounded-full animate-pulse bg-gray-200 dark:bg-gray-700" style="animation-delay: 0.1s"></div>
+                <div class="h-2 w-16 rounded-full animate-pulse bg-gray-200 dark:bg-gray-700" style="animation-delay: 0.2s"></div>
+              </div>
+            </template>
           </div>
         </div>
       </template>
@@ -633,8 +697,9 @@ async function handleSendMessage(messageData) {
 // Watch für Auto-TTS nach Antwort
 watch(() => chatStore.isLoading, async (isLoading, wasLoading) => {
   console.log('👁️ isLoading changed:', wasLoading, '→', isLoading, '| pendingVoiceResponse:', pendingVoiceResponse.value)
-  // Wenn Laden fertig UND wir auf Voice-Response warten
-  if (!isLoading && wasLoading && pendingVoiceResponse.value) {
+  // Wenn Laden fertig UND wir auf Voice-Response warten UND TTS aktiviert
+  const ttsEnabled = localStorage.getItem('ttsEnabled') !== 'false' // Default: true
+  if (!isLoading && wasLoading && pendingVoiceResponse.value && ttsEnabled) {
     pendingVoiceResponse.value = false
     console.log('✅ Triggering Auto-TTS!')
 
@@ -793,5 +858,413 @@ function sendSuggestion(text) {
 /* Greeting Text Glow Effect */
 .greeting-text {
   text-shadow: 0 0 40px rgba(249, 115, 22, 0.2);
+}
+
+/* ============================================
+   DATA WAVE - Web Search Animation
+   ============================================ */
+
+/* Icon Container with Glow Pulse */
+.web-search-icon {
+  animation: icon-glow 2s ease-in-out infinite;
+}
+
+@keyframes icon-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.4),
+                0 0 40px rgba(139, 92, 246, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(59, 130, 246, 0.6),
+                0 0 60px rgba(139, 92, 246, 0.4);
+  }
+}
+
+/* Data Wave Container */
+.data-wave-container {
+  width: 200px;
+  height: 40px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  background: linear-gradient(135deg,
+    rgba(6, 182, 212, 0.1) 0%,
+    rgba(59, 130, 246, 0.15) 50%,
+    rgba(139, 92, 246, 0.1) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+/* Wave Line - Animated SVG-like Path */
+.wave-line {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 400%;
+  height: 2px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(6, 182, 212, 0.8) 10%,
+    rgba(59, 130, 246, 1) 25%,
+    rgba(139, 92, 246, 0.8) 40%,
+    rgba(59, 130, 246, 1) 55%,
+    rgba(6, 182, 212, 0.8) 70%,
+    transparent 100%);
+  animation: wave-flow 2s linear infinite;
+  transform: translateY(-50%);
+}
+
+.wave-line::before,
+.wave-line::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: inherit;
+}
+
+.wave-line::before {
+  top: -8px;
+  opacity: 0.4;
+  animation: wave-secondary 2s linear infinite;
+  animation-delay: 0.3s;
+}
+
+.wave-line::after {
+  top: 8px;
+  opacity: 0.3;
+  animation: wave-secondary 2s linear infinite;
+  animation-delay: 0.6s;
+}
+
+@keyframes wave-flow {
+  0% {
+    transform: translateX(-50%) translateY(-50%);
+  }
+  100% {
+    transform: translateX(0%) translateY(-50%);
+  }
+}
+
+@keyframes wave-secondary {
+  0% {
+    transform: translateX(-50%) scaleY(0.5);
+  }
+  50% {
+    transform: translateX(-25%) scaleY(1.5);
+  }
+  100% {
+    transform: translateX(0%) scaleY(0.5);
+  }
+}
+
+/* Data Particles - Floating through the wave */
+.data-particles {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.particle {
+  position: absolute;
+  width: var(--size, 4px);
+  height: var(--size, 4px);
+  border-radius: 50%;
+  background: linear-gradient(135deg, #06b6d4, #3b82f6, #8b5cf6);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.8),
+              0 0 16px rgba(139, 92, 246, 0.4);
+  animation: particle-flow 2s ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.particle:nth-child(1) { top: 30%; }
+.particle:nth-child(2) { top: 70%; }
+.particle:nth-child(3) { top: 45%; }
+.particle:nth-child(4) { top: 55%; }
+.particle:nth-child(5) { top: 35%; }
+.particle:nth-child(6) { top: 65%; }
+
+@keyframes particle-flow {
+  0% {
+    left: -10%;
+    opacity: 0;
+    transform: translateY(-50%) scale(0.5);
+  }
+  10% {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+  50% {
+    transform: translateY(calc(-50% + 4px)) scale(1.2);
+  }
+  90% {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+  100% {
+    left: 110%;
+    opacity: 0;
+    transform: translateY(-50%) scale(0.5);
+  }
+}
+
+/* Extra glow effect for the wave container */
+.data-wave-container::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(ellipse at center,
+    rgba(59, 130, 246, 0.15) 0%,
+    transparent 70%);
+  animation: container-glow 3s ease-in-out infinite;
+}
+
+@keyframes container-glow {
+  0%, 100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+/* ============================================
+   ORBIT ANIMATION - Kreisende Datenpunkte
+   ============================================ */
+
+.orbit-container {
+  width: 200px;
+  height: 40px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg,
+    rgba(99, 102, 241, 0.1) 0%,
+    rgba(139, 92, 246, 0.15) 100%);
+  border-radius: 12px;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  overflow: hidden;
+}
+
+.orbit-center {
+  width: 30px;
+  height: 30px;
+  position: relative;
+}
+
+.orbit-ring {
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 50%;
+  animation: orbit-pulse 2s ease-in-out infinite;
+}
+
+.orbit-ring-2 {
+  inset: -5px;
+  border-color: rgba(139, 92, 246, 0.2);
+  animation-delay: 0.5s;
+}
+
+.orbit-dot {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.8);
+  animation: orbit-rotate 2s linear infinite;
+  top: 50%;
+  left: 50%;
+  transform-origin: 0 0;
+}
+
+.orbit-dot-2 {
+  animation-delay: -0.66s;
+  background: linear-gradient(135deg, #8b5cf6, #a855f7);
+}
+
+.orbit-dot-3 {
+  animation-delay: -1.33s;
+  background: linear-gradient(135deg, #a855f7, #6366f1);
+}
+
+@keyframes orbit-rotate {
+  0% {
+    transform: rotate(0deg) translateX(18px) rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg) translateX(18px) rotate(-360deg);
+  }
+}
+
+@keyframes orbit-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+}
+
+/* ============================================
+   RADAR ANIMATION - Scanning Effekt
+   ============================================ */
+
+.radar-container {
+  width: 200px;
+  height: 40px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg,
+    rgba(16, 185, 129, 0.1) 0%,
+    rgba(5, 150, 105, 0.15) 100%);
+  border-radius: 12px;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  overflow: hidden;
+}
+
+.radar-sweep {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgba(16, 185, 129, 0.4) 30deg,
+    transparent 60deg
+  );
+  border-radius: 50%;
+  animation: radar-spin 2s linear infinite;
+}
+
+.radar-ring {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 50%;
+}
+
+.radar-ring-2 {
+  width: 30px;
+  height: 30px;
+  border-color: rgba(16, 185, 129, 0.2);
+}
+
+.radar-ring-3 {
+  width: 38px;
+  height: 38px;
+  border-color: rgba(16, 185, 129, 0.15);
+}
+
+.radar-blip {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: #10b981;
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.8);
+  animation: radar-blink 1.5s ease-in-out infinite;
+  top: 50%;
+  left: 50%;
+  transform: rotate(var(--angle)) translateX(calc(var(--distance) * 0.4)) translateY(-50%);
+}
+
+@keyframes radar-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes radar-blink {
+  0%, 100% {
+    opacity: 0.3;
+    transform: rotate(var(--angle)) translateX(calc(var(--distance) * 0.4)) translateY(-50%) scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: rotate(var(--angle)) translateX(calc(var(--distance) * 0.4)) translateY(-50%) scale(1.2);
+  }
+}
+
+/* ============================================
+   CONSTELLATION ANIMATION - Sternbild-Netzwerk
+   ============================================ */
+
+.constellation-container {
+  width: 200px;
+  height: 40px;
+  position: relative;
+  background: linear-gradient(135deg,
+    rgba(139, 92, 246, 0.1) 0%,
+    rgba(236, 72, 153, 0.1) 100%);
+  border-radius: 12px;
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  overflow: hidden;
+}
+
+.constellation-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.constellation-line {
+  stroke: rgba(139, 92, 246, 0.4);
+  stroke-width: 1;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: constellation-draw 2s ease-out infinite;
+}
+
+.constellation-star {
+  fill: url(#star-gradient);
+  animation: constellation-twinkle 1.5s ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+@keyframes constellation-draw {
+  0% {
+    stroke-dashoffset: 100;
+    opacity: 0.3;
+  }
+  50% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: -100;
+    opacity: 0.3;
+  }
+}
+
+@keyframes constellation-twinkle {
+  0%, 100% {
+    opacity: 0.5;
+    transform: scale(0.8);
+    fill: #8b5cf6;
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+    fill: #ec4899;
+  }
 }
 </style>

@@ -11,17 +11,37 @@ import (
 
 // WizardState repräsentiert den aktuellen Zustand des Setup-Wizards
 type WizardState struct {
-	CurrentStep    int           `json:"currentStep"`
-	TotalSteps     int           `json:"totalSteps"`
-	Completed      bool          `json:"completed"`
-	SystemInfo     *SystemInfo   `json:"systemInfo,omitempty"`
-	SelectedModel  string        `json:"selectedModel,omitempty"`
-	VoiceEnabled   bool          `json:"voiceEnabled"`
-	WhisperModel   string        `json:"whisperModel,omitempty"`
-	PiperVoice     string        `json:"piperVoice,omitempty"`
-	VisionEnabled  bool          `json:"visionEnabled"`
-	VisionModel    string        `json:"visionModel,omitempty"`
-	Error          string        `json:"error,omitempty"`
+	CurrentStep        int           `json:"currentStep"`
+	TotalSteps         int           `json:"totalSteps"`
+	Completed          bool          `json:"completed"`
+	SystemInfo         *SystemInfo   `json:"systemInfo,omitempty"`
+	SelectedModel      string        `json:"selectedModel,omitempty"`
+	VoiceEnabled       bool          `json:"voiceEnabled"`
+	WhisperModel       string        `json:"whisperModel,omitempty"`
+	PiperVoice         string        `json:"piperVoice,omitempty"`
+	VisionEnabled      bool          `json:"visionEnabled"`
+	VisionModel        string        `json:"visionModel,omitempty"`
+	DisclaimerAccepted bool          `json:"disclaimerAccepted"`
+	Error              string        `json:"error,omitempty"`
+}
+
+// SetupSummary enthält die Zusammenfassung aller installierten Komponenten
+type SetupSummary struct {
+	LLMModel       *ComponentStatus `json:"llmModel"`
+	VisionModel    *ComponentStatus `json:"visionModel,omitempty"`
+	WhisperSTT     *ComponentStatus `json:"whisperSTT,omitempty"`
+	PiperTTS       *ComponentStatus `json:"piperTTS,omitempty"`
+	LlamaServer    *ComponentStatus `json:"llamaServer"`
+	Experts        *ComponentStatus `json:"experts"`
+	DisclaimerText string           `json:"disclaimerText"`
+}
+
+// ComponentStatus zeigt den Status einer installierten Komponente
+type ComponentStatus struct {
+	Name        string `json:"name"`
+	Installed   bool   `json:"installed"`
+	Version     string `json:"version,omitempty"`
+	Description string `json:"description,omitempty"`
 }
 
 // SystemInfo enthält Informationen über das System
@@ -149,60 +169,39 @@ func (s *Service) GetModelRecommendations() []ModelRecommendation {
 		DescCPU   string
 	}{
 		{
-			"qwen2.5-1.5b-instruct-q4_k_m.gguf",
-			"Qwen 2.5 1.5B",
-			1.1, 8, 2,
-			"Schnell und effizient - ideal für einfache Aufgaben",
-			"Einsteiger-Modell - schnell auch auf CPU",
+			"Llama-3.2-1B-Instruct-Q4_K_M.gguf",
+			"Llama 3.2 1B",
+			0.8, 8, 2,
+			"Ultra-kompakt - ideal für einfache Aufgaben",
+			"Einsteiger-Modell - sehr schnell auf CPU",
 		},
 		{
-			"qwen2.5-3b-instruct-q4_k_m.gguf",
-			"Qwen 2.5 3B",
-			2.0, 16, 4,
-			"Gute Balance zwischen Qualität und Geschwindigkeit",
-			"Solide Qualität - akzeptable Geschwindigkeit auf CPU",
-		},
-		{
-			"Qwen2.5-7B-Instruct-Q4_K_M.gguf",
-			"Qwen 2.5 7B",
-			4.7, 32, 8,
-			"Sehr gute Qualität - empfohlen für die meisten Aufgaben",
-			"Hohe Qualität - auf CPU etwas langsamer",
-		},
-		{
-			"gemma-2-9b-it-Q4_K_M.gguf",
-			"Gemma 2 9B",
-			5.8, 32, 10, // Ideal für 12GB GPUs
-			"Exzellent für Übersetzung & Multilingual - Google DeepMind",
-			"Sehr gute Qualität - starke Multilingual-Fähigkeiten",
+			"Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+			"Llama 3.2 3B",
+			2.0, 12, 4,
+			"Kompakt & schnell - gute Balance",
+			"Solide Qualität - schnell auf CPU",
 		},
 		{
 			"Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
 			"Llama 3.1 8B",
-			4.9, 24, 8, // Meta's neuestes 8B - ideal für 12GB GPUs
-			"Metas neuestes 8B Modell - 128K Context, schnell & multilingual",
+			4.6, 24, 8,
+			"Metas 8B Modell - 128K Context, schnell & multilingual",
 			"Sehr gute Qualität - schnell auf CPU, 128K Context!",
 		},
 		{
-			"phi-4-Q4_K_M.gguf",
-			"Phi-4 14B",
-			9.1, 48, 16, // 16GB VRAM nötig für flüssige Performance mit Context
-			"Starkes Reasoning & Analyse - für 16GB+ GPUs empfohlen",
-			"Exzellentes Reasoning - benötigt viel RAM/VRAM",
+			"gemma-2-9b-it-Q4_K_M.gguf",
+			"Gemma 2 9B",
+			5.4, 32, 10,
+			"Exzellent für Übersetzung & Multilingual - Google DeepMind",
+			"Sehr gute Qualität - starke Multilingual-Fähigkeiten",
 		},
 		{
 			"Qwen2.5-14B-Instruct-Q4_K_M.gguf",
 			"Qwen 2.5 14B",
-			9.0, 48, 16, // 16GB VRAM für flüssige Performance
+			8.4, 48, 16,
 			"Premium-Qualität - für anspruchsvolle Aufgaben",
 			"Premium-Qualität - erfordert Geduld auf CPU",
-		},
-		{
-			"Qwen2.5-32B-Instruct-Q4_K_M.gguf",
-			"Qwen 2.5 32B",
-			20.0, 64, 24,
-			"Top-Qualität - für Experten und komplexe Analysen",
-			"Beste Qualität - nur mit sehr viel RAM empfohlen",
 		},
 	}
 
@@ -293,7 +292,8 @@ func (s *Service) GetVoiceOptions() map[string]interface{} {
 			{"id": "large-v3-turbo", "name": "Large V3 Turbo", "sizeMB": 1620, "description": "Beste Turbo-Qualität"},
 		},
 		"piperVoices": []map[string]interface{}{
-			{"id": "de_DE-thorsten-medium", "name": "Thorsten", "sizeMB": 63, "description": "Männlich, neutral - Standard"},
+			{"id": "de_DE-eva_k-x_low", "name": "Eva", "sizeMB": 18, "description": "Weiblich, freundlich - Standard"},
+			{"id": "de_DE-thorsten-medium", "name": "Thorsten", "sizeMB": 63, "description": "Männlich, neutral"},
 			{"id": "de_DE-thorsten-high", "name": "Thorsten HD", "sizeMB": 90, "description": "Männlich, hohe Qualität"},
 			{"id": "de_DE-kerstin-low", "name": "Kerstin", "sizeMB": 30, "description": "Weiblich, klar"},
 		},
@@ -319,38 +319,17 @@ func (s *Service) SetVoiceOptions(enabled bool, whisperModel, piperVoice string)
 
 // GetVisionOptions gibt Vision-Optionen zurück (für Dokumentenerkennung)
 func (s *Service) GetVisionOptions(sysInfo *SystemInfo) map[string]interface{} {
-	// Vision-Modelle mit VRAM-Anforderungen
-	// LLaVA braucht: Modell + mmproj (Vision Encoder)
+	// Vision-Modell: MiniCPM-V 2.6 (beste OCR und Dokumentenerkennung)
 	models := []map[string]interface{}{
-		{
-			"id":          "llava-v1.6-mistral-7b",
-			"name":        "LLaVA 1.6 Mistral 7B",
-			"sizeMB":      4500, // ~4.5GB Modell + 624MB mmproj
-			"mmproj":      "mmproj-model-f16.gguf",
-			"minVramGB":   8,
-			"minRamGB":    16,
-			"description": "Gute Balance - Standard für Dokumentenerkennung",
-			"recommended": true,
-		},
-		{
-			"id":          "llava-llama-3-8b",
-			"name":        "LLaVA Llama 3 8B",
-			"sizeMB":      5000, // ~5GB Modell + mmproj
-			"mmproj":      "llava-llama-3-8b-v1_1-mmproj-f16.gguf",
-			"minVramGB":   10,
-			"minRamGB":    24,
-			"description": "Neuer, basiert auf Llama 3 - bessere Qualität",
-			"recommended": false,
-		},
 		{
 			"id":          "minicpm-v-2.6",
 			"name":        "MiniCPM-V 2.6",
-			"sizeMB":      5500, // ~5.5GB
-			"mmproj":      "mmproj-minicpm-v-2.6-f16.gguf",
+			"sizeMB":      5400, // ~4.4GB Modell + 1GB mmproj
+			"mmproj":      "MiniCPM-V-2_6-mmproj-f16.gguf",
 			"minVramGB":   8,
 			"minRamGB":    16,
-			"description": "GPT-4V Niveau - sehr gut für OCR und Dokumente",
-			"recommended": false,
+			"description": "GPT-4V Niveau - beste OCR und Dokumentenerkennung",
+			"recommended": true,
 		},
 	}
 

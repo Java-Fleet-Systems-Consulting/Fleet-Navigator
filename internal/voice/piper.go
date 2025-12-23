@@ -61,7 +61,7 @@ var piperVoices = map[string]VoiceInfo{
 		Language:    "de_DE",
 		Quality:     "high",
 		SizeMB:      90,
-		Description: "Männlich, neutral - Hohe Qualität",
+		Description: "Männlich, beste Qualität ⭐",
 		ModelURL:    piperVoicesBase + "de/de_DE/thorsten/high/de_DE-thorsten-high.onnx",
 		ConfigURL:   piperVoicesBase + "de/de_DE/thorsten/high/de_DE-thorsten-high.onnx.json",
 	},
@@ -92,7 +92,7 @@ var piperVoices = map[string]VoiceInfo{
 		Language:    "de_DE",
 		Quality:     "low",
 		SizeMB:      30,
-		Description: "Weiblich, klar",
+		Description: "Weiblich, klar ⭐ Empfohlen",
 		ModelURL:    piperVoicesBase + "de/de_DE/kerstin/low/de_DE-kerstin-low.onnx",
 		ConfigURL:   piperVoicesBase + "de/de_DE/kerstin/low/de_DE-kerstin-low.onnx.json",
 	},
@@ -166,7 +166,7 @@ type VoiceInfo struct {
 // NewPiperTTS erstellt eine neue Piper-Instanz
 func NewPiperTTS(dataDir, voice string) *PiperTTS {
 	if voice == "" {
-		voice = "de_DE-thorsten-medium"
+		voice = "de_DE-kerstin-low"
 	}
 
 	p := &PiperTTS{

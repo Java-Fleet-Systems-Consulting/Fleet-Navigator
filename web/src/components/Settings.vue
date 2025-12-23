@@ -116,6 +116,52 @@
               </button>
             </div>
           </div>
+
+          <!-- Hardware & Performance Untersektion -->
+          <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+            <h3 class="text-md font-semibold text-gray-900 dark:text-white mb-3">
+              🖥️ Hardware & Performance
+            </h3>
+
+            <!-- CPU-Only Mode Toggle -->
+            <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
+              <div>
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  CPU-Modus (ohne GPU)
+                </label>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Deaktiviert CUDA/GPU-Beschleunigung für Demos auf Laptops ohne NVIDIA
+                </p>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  v-model="settingsStore.settings.cpuOnly"
+                  class="sr-only peer"
+                >
+                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 dark:peer-focus:ring-orange-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-orange-500"></div>
+              </label>
+            </div>
+
+            <!-- Info Box when CPU-Only is active -->
+            <div v-if="settingsStore.settings.cpuOnly" class="mt-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-3">
+              <p class="text-xs text-orange-800 dark:text-orange-200">
+                ⚠️ <strong>CPU-Modus aktiv:</strong> Antworten sind langsamer, aber ideal für Hardware ohne NVIDIA GPU.
+              </p>
+            </div>
+
+            <!-- Info about GPU usage when inactive -->
+            <div v-else class="mt-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
+              <p class="text-xs text-green-800 dark:text-green-200">
+                ✅ <strong>GPU-Beschleunigung aktiv:</strong> Nutzt automatisch verfügbare NVIDIA GPUs.
+              </p>
+            </div>
+
+            <!-- VRAM Settings -->
+            <div class="mt-4">
+              <VRAMSettings />
+            </div>
+          </div>
         </div>
 
         <!-- Fleet Mates Settings -->
@@ -499,53 +545,202 @@
           </div>
         </div>
 
-        <!-- Hardware/Performance Settings -->
+        <!-- Voice Assistant / Wake Word Settings -->
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            🖥️ Hardware & Performance
-          </h2>
-          <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
-            Einstellungen für GPU-Beschleunigung und Hardware-Nutzung
-          </p>
-
-          <!-- CPU-Only Mode Toggle -->
-          <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
+          <div class="flex items-start justify-between mb-4">
             <div>
-              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                CPU-Modus (ohne GPU)
-              </label>
-              <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Deaktiviert CUDA/GPU-Beschleunigung für Demos auf Laptops ohne NVIDIA
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                🎤 Sprachassistent (Wake Word)
+              </h2>
+              <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                "Hey Ewa" - Always-On Spracherkennung mit Wake Word
               </p>
             </div>
             <label class="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
-                v-model="settingsStore.settings.cpuOnly"
+                v-model="voiceAssistantSettings.enabled"
                 class="sr-only peer"
+                @change="saveVoiceAssistantSettings"
               >
-              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 dark:peer-focus:ring-orange-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-orange-500"></div>
+              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 dark:peer-focus:ring-green-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-green-600"></div>
             </label>
           </div>
 
-          <!-- Info Box when CPU-Only is active -->
-          <div v-if="settingsStore.settings.cpuOnly" class="mt-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
-            <p class="text-sm text-orange-800 dark:text-orange-200">
-              ⚠️ <strong>CPU-Modus aktiv:</strong> Ollama verwendet nur die CPU. Die Antworten sind langsamer, aber ideal für Demos auf Hardware ohne NVIDIA GPU.
-            </p>
+          <!-- Status Anzeige -->
+          <div v-if="voiceAssistantStatus.running" class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-4">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="animate-pulse">🟢</span>
+                <span class="text-sm font-medium text-green-800 dark:text-green-200">
+                  Lauscht auf "{{ getWakeWordDisplay(voiceAssistantSettings.wakeWord) }}"...
+                </span>
+              </div>
+              <button
+                @click="stopVoiceAssistant"
+                class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm transition-colors"
+              >
+                Stoppen
+              </button>
+            </div>
           </div>
 
-          <!-- Info about GPU usage when inactive -->
-          <div v-else class="mt-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-            <p class="text-sm text-green-800 dark:text-green-200">
-              ✅ <strong>GPU-Beschleunigung aktiv:</strong> Ollama nutzt automatisch verfügbare NVIDIA GPUs für maximale Performance.
-            </p>
+          <div v-else-if="voiceAssistantSettings.enabled" class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-4">
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-yellow-800 dark:text-yellow-200">
+                ⏸️ Sprachassistent bereit aber nicht aktiv
+              </span>
+              <button
+                @click="startVoiceAssistant"
+                class="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm transition-colors"
+              >
+                Starten
+              </button>
+            </div>
           </div>
-        </div>
 
-        <!-- VRAM / GPU Settings -->
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <VRAMSettings />
+          <div v-if="voiceAssistantStatus.quietHoursActive" class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+            <span class="text-sm text-blue-800 dark:text-blue-200">
+              🌙 Ruhezeit aktiv ({{ voiceAssistantSettings.quietHoursStart }} - {{ voiceAssistantSettings.quietHoursEnd }})
+            </span>
+          </div>
+
+          <div class="space-y-4" :class="{ 'opacity-50 pointer-events-none': !voiceAssistantSettings.enabled }">
+            <!-- Wake Word Selection -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                🗣️ Wake Word
+              </label>
+              <div class="grid grid-cols-3 gap-3">
+                <button
+                  @click="voiceAssistantSettings.wakeWord = 'hey_ewa'; saveVoiceAssistantSettings()"
+                  :class="[
+                    'p-3 rounded-lg border-2 transition-all text-center',
+                    voiceAssistantSettings.wakeWord === 'hey_ewa'
+                      ? 'border-green-500 bg-green-500/10'
+                      : 'border-gray-300 dark:border-gray-600 hover:border-green-400'
+                  ]"
+                >
+                  <span class="block font-medium text-gray-900 dark:text-white">"Hey Ewa"</span>
+                  <span class="text-xs text-gray-500 dark:text-gray-400">Standard</span>
+                </button>
+                <button
+                  @click="voiceAssistantSettings.wakeWord = 'ewa'; saveVoiceAssistantSettings()"
+                  :class="[
+                    'p-3 rounded-lg border-2 transition-all text-center',
+                    voiceAssistantSettings.wakeWord === 'ewa'
+                      ? 'border-green-500 bg-green-500/10'
+                      : 'border-gray-300 dark:border-gray-600 hover:border-green-400'
+                  ]"
+                >
+                  <span class="block font-medium text-gray-900 dark:text-white">"Ewa"</span>
+                  <span class="text-xs text-gray-500 dark:text-gray-400">Kurz</span>
+                </button>
+                <button
+                  @click="voiceAssistantSettings.wakeWord = 'custom'; saveVoiceAssistantSettings()"
+                  :class="[
+                    'p-3 rounded-lg border-2 transition-all text-center',
+                    voiceAssistantSettings.wakeWord === 'custom'
+                      ? 'border-green-500 bg-green-500/10'
+                      : 'border-gray-300 dark:border-gray-600 hover:border-green-400'
+                  ]"
+                >
+                  <span class="block font-medium text-gray-900 dark:text-white">Eigenes</span>
+                  <span class="text-xs text-gray-500 dark:text-gray-400">Benutzerdefiniert</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Custom Wake Word Input -->
+            <div v-if="voiceAssistantSettings.wakeWord === 'custom'">
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Eigenes Wake Word
+              </label>
+              <input
+                v-model="customWakeWord"
+                type="text"
+                placeholder="z.B. 'Computer', 'Jarvis', ..."
+                class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                @change="saveVoiceAssistantSettings"
+              >
+            </div>
+
+            <!-- Auto-Stop Toggle -->
+            <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
+              <div>
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  ⏹️ Auto-Stopp nach Antwort
+                </label>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Beendet Lauschen nach einer vollständigen Antwort
+                </p>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  v-model="voiceAssistantSettings.autoStop"
+                  class="sr-only peer"
+                  @change="saveVoiceAssistantSettings"
+                >
+                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 dark:peer-focus:ring-green-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-green-600"></div>
+              </label>
+            </div>
+
+            <!-- Quiet Hours -->
+            <div class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+              <div class="flex items-center justify-between mb-3">
+                <div>
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    🌙 Ruhezeiten (Work-Life-Balance)
+                  </label>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Sprachassistent pausiert während dieser Zeit
+                  </p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    v-model="voiceAssistantSettings.quietHoursEnabled"
+                    class="sr-only peer"
+                    @change="saveVoiceAssistantSettings"
+                  >
+                  <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
+
+              <div v-if="voiceAssistantSettings.quietHoursEnabled" class="grid grid-cols-2 gap-4 mt-4">
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Von</label>
+                  <input
+                    v-model="voiceAssistantSettings.quietHoursStart"
+                    type="time"
+                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    @change="saveVoiceAssistantSettings"
+                  >
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Bis</label>
+                  <input
+                    v-model="voiceAssistantSettings.quietHoursEnd"
+                    type="time"
+                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    @change="saveVoiceAssistantSettings"
+                  >
+                </div>
+              </div>
+            </div>
+
+            <!-- Info Box -->
+            <div class="p-4 bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 border border-green-200 dark:border-green-700 rounded-lg">
+              <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">💡 So funktioniert's</h4>
+              <ul class="space-y-1 text-xs text-gray-600 dark:text-gray-400">
+                <li>1. Sage <strong>"{{ getWakeWordDisplay(voiceAssistantSettings.wakeWord) }}"</strong> um Ewa zu aktivieren</li>
+                <li>2. Stelle deine Frage oder gib einen Befehl</li>
+                <li>3. Ewa antwortet per Sprache (TTS)</li>
+                <li>4. Wiederhole oder sage "Stop" zum Beenden</li>
+              </ul>
+            </div>
+          </div>
         </div>
 
         <!-- Default Model -->
@@ -600,54 +795,55 @@
           </ul>
         </div>
 
-        <!-- Sampling Parameters -->
+        <!-- Model Funktionen (System-Prompts + Sampling Parameter) -->
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <div class="mb-4">
+          <div class="mb-6">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
-              🎛️ LLM Sampling Parameter
+              🎛️ Model Funktionen
             </h2>
             <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              Feinsteuerung aller Parameter für text- und vision-basierte Modelle
+              System-Prompts und Sampling-Parameter für dein Chat-Modell
             </p>
           </div>
 
-          <div class="p-4 bg-red-100 border-2 border-red-500 text-red-900 font-bold text-xl">
-            TEST: Wenn du das hier siehst, wird die Sektion geladen!
-          </div>
-
-          <SamplingParametersPanel
-            v-model="defaultSamplingParams"
-            :model-name="settings.defaultModel"
-          />
-
-          <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <button
-              @click="saveSamplingParams"
-              class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-            >
-              <i class="fas fa-save mr-2"></i>
-              Parameter als Standard speichern
-            </button>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
-              Diese Parameter werden für alle neuen Chats als Standard verwendet
+          <!-- Sampling Parameters Sektion -->
+          <div class="mb-8 p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+            <h3 class="text-md font-semibold text-gray-900 dark:text-white mb-3">
+              🎚️ Sampling Parameter
+            </h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
+              Feinsteuerung der Text-Generierung (Temperature, Top-P, etc.)
             </p>
-          </div>
-        </div>
 
-        <!-- System Prompt Management -->
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <SamplingParametersPanel
+              v-model="defaultSamplingParams"
+              :model-name="settings.defaultModel"
+            />
+
+            <div class="mt-4 pt-4 border-t border-blue-200 dark:border-blue-700">
+              <button
+                @click="saveSamplingParams"
+                class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+              >
+                <i class="fas fa-save mr-2"></i>
+                Parameter speichern
+              </button>
+            </div>
+          </div>
+
+          <!-- System-Prompts Sektion -->
           <div class="flex items-center justify-between mb-4">
             <div>
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
-                📝 System-Prompts Verwaltung
-              </h2>
-              <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                Erstelle und verwalte wiederverwendbare System-Prompts für deine Chats
+              <h3 class="text-md font-semibold text-gray-900 dark:text-white">
+                📝 System-Prompts
+              </h3>
+              <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Wiederverwendbare System-Prompts (z.B. Karla, Code-Experte)
               </p>
             </div>
             <button
               @click="showPromptEditor = true; editingPrompt = null"
-              class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2"
+              class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2 text-sm"
             >
               <i class="fas fa-plus"></i>
               Neuer Prompt
@@ -898,6 +1094,22 @@ const promptForm = ref({
   isDefault: false
 })
 
+// Voice Assistant Settings
+const voiceAssistantSettings = ref({
+  enabled: false,
+  wakeWord: 'hey_ewa',
+  autoStop: true,
+  quietHoursEnabled: false,
+  quietHoursStart: '22:00',
+  quietHoursEnd: '07:00'
+})
+const voiceAssistantStatus = ref({
+  running: false,
+  state: 'idle',
+  quietHoursActive: false
+})
+const customWakeWord = ref('')
+
 // PostgreSQL Status (von der Komponente)
 const postgresConnected = ref(false)
 
@@ -985,6 +1197,7 @@ onMounted(async () => {
   await loadSamplingParamsFromDB()  // Neu: Sampling von DB laden
   await loadSystemPrompts()
   await loadTrustedMatesCount()
+  await loadVoiceAssistantSettings()  // Voice Assistant Settings laden
 })
 
 async function loadSettings() {
@@ -1277,6 +1490,90 @@ async function forgetAllMates() {
     saveStatus.value = { success: false, message: 'Fehler beim Vergessen der Mates' }
   } finally {
     forgettingMates.value = false
+  }
+}
+
+// ===== Voice Assistant Functions =====
+
+async function loadVoiceAssistantSettings() {
+  try {
+    const settings = await api.getVoiceAssistantSettings()
+    if (settings) {
+      voiceAssistantSettings.value = settings
+    }
+    // Status auch laden
+    const status = await api.getVoiceAssistantStatus()
+    if (status) {
+      voiceAssistantStatus.value = status
+    }
+  } catch (error) {
+    console.error('Failed to load voice assistant settings:', error)
+  }
+}
+
+async function saveVoiceAssistantSettings() {
+  try {
+    await api.saveVoiceAssistantSettings(voiceAssistantSettings.value)
+    saveStatus.value = { success: true, message: 'Sprachassistent-Einstellungen gespeichert!' }
+
+    // Clear status after 3 seconds
+    setTimeout(() => {
+      saveStatus.value = null
+    }, 3000)
+  } catch (error) {
+    console.error('Failed to save voice assistant settings:', error)
+    saveStatus.value = { success: false, message: 'Fehler beim Speichern der Sprachassistent-Einstellungen' }
+  }
+}
+
+async function startVoiceAssistant() {
+  try {
+    const result = await api.startVoiceAssistant()
+    if (result.success) {
+      voiceAssistantStatus.value.running = true
+      saveStatus.value = { success: true, message: '🎤 Sprachassistent gestartet!' }
+    } else {
+      throw new Error(result.message || 'Start fehlgeschlagen')
+    }
+
+    setTimeout(() => {
+      saveStatus.value = null
+    }, 3000)
+  } catch (error) {
+    console.error('Failed to start voice assistant:', error)
+    saveStatus.value = { success: false, message: 'Fehler beim Starten des Sprachassistenten' }
+  }
+}
+
+async function stopVoiceAssistant() {
+  try {
+    const result = await api.stopVoiceAssistant()
+    if (result.success) {
+      voiceAssistantStatus.value.running = false
+      saveStatus.value = { success: true, message: '⏹️ Sprachassistent gestoppt' }
+    } else {
+      throw new Error(result.message || 'Stop fehlgeschlagen')
+    }
+
+    setTimeout(() => {
+      saveStatus.value = null
+    }, 3000)
+  } catch (error) {
+    console.error('Failed to stop voice assistant:', error)
+    saveStatus.value = { success: false, message: 'Fehler beim Stoppen des Sprachassistenten' }
+  }
+}
+
+function getWakeWordDisplay(wakeWord) {
+  switch (wakeWord) {
+    case 'hey_ewa':
+      return 'Hey Ewa'
+    case 'ewa':
+      return 'Ewa'
+    case 'custom':
+      return customWakeWord.value || 'Eigenes Wort'
+    default:
+      return 'Hey Ewa'
   }
 }
 </script>

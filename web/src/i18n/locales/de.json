@@ -494,6 +494,8 @@
       "installed": "Installiert",
       "autoPlay": "Automatisch vorlesen",
       "autoPlayDesc": "Antworten automatisch vorlesen",
+      "ttsEnabled": "Sprachausgabe aktiviert",
+      "ttsEnabledDesc": "Ermöglicht das Vorlesen von Antworten per Lautsprecher-Button",
       "whisperStt": "Whisper STT (Spracheingabe)",
       "piperTts": "Piper TTS (Sprachausgabe)",
       "ready": "Bereit",

@@ -594,6 +594,7 @@ myService := mymodule.NewService()
 
 | Datum | Datei | Hauptänderungen |
 |-------|-------|-----------------|
+| 2025-12-23 | [CHANGELOG_2025-12-23.md](docs/CHANGELOG_2025-12-23.md) | **Mirror-First & MiniCPM-V Default**: Download-Strategie Mirror zuerst, MiniCPM-V-2.6 als Standard-Vision-Modell, Vision-Chaining automatisch aktiviert |
 | 2025-12-16 | [CHANGELOG_2025-12-16.md](docs/CHANGELOG_2025-12-16.md) | **Mate Status & Disconnect Fix**: Falscher Online-Status behoben, Disconnect bei Mate-Entfernen |
 | 2025-12-15 | [CHANGELOG_2025-12-15.md](docs/CHANGELOG_2025-12-15.md) | **Expert/Modus-Zuordnung pro Message**: Fixe Zuordnung in DB, Security Audit abgeschlossen |
 | 2025-12-13 | [CHANGELOG_2025-12-13.md](docs/CHANGELOG_2025-12-13.md) | **Mate Pairing & Encryption Fixes**: messageId Type Mismatch, Pairing-Synchronisation, Thunderbird-Funktionen exponiert |

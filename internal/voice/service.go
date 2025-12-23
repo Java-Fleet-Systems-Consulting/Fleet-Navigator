@@ -29,7 +29,7 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		WhisperModel: "base",
-		PiperVoice:   "de_DE-thorsten-medium",
+		PiperVoice:   "de_DE-eva_k-x_low",
 		Language:     "de",
 	}
 }

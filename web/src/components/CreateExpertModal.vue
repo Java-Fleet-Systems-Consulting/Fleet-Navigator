@@ -514,15 +514,16 @@ const form = ref({
 
 // Verfügbare TTS Stimmen mit Beispielsätzen
 const availableVoices = [
-  { id: 'de_DE-thorsten-medium', name: 'Thorsten', description: 'Männlich, neutral', gender: 'male', sample: 'Hallo, ich bin Thorsten. Wie kann ich Ihnen heute behilflich sein?' },
-  { id: 'de_DE-thorsten-high', name: 'Thorsten HD', description: 'Männlich, hohe Qualität', gender: 'male', sample: 'Guten Tag, mein Name ist Thorsten. Ich freue mich, Sie kennenzulernen.' },
+  // Empfohlene Stimmen zuerst
+  { id: 'de_DE-kerstin-low', name: 'Kerstin', description: 'Weiblich, klar ⭐', gender: 'female', sample: 'Mein Name ist Kerstin. Ich stehe Ihnen gerne zur Verfügung.' },
+  { id: 'de_DE-thorsten-high', name: 'Thorsten HD', description: 'Männlich, beste Qualität ⭐', gender: 'male', sample: 'Guten Tag, mein Name ist Thorsten. Ich freue mich, Sie kennenzulernen.' },
+  // Weitere Stimmen
   { id: 'de_DE-thorsten_emotional-medium', name: 'Thorsten Emotional', description: 'Männlich, expressiv', gender: 'male', sample: 'Das ist ja fantastisch! Ich bin wirklich begeistert von dieser Idee!' },
-  { id: 'de_DE-mls-medium', name: 'MLS', description: 'Neutral, Multi-Speaker', gender: 'neutral', sample: 'Guten Tag, ich bin die MLS-Stimme. Ich wurde auf einem großen Datensatz trainiert.' },
-  { id: 'de_DE-eva_k-x_low', name: 'Eva K', description: 'Weiblich', gender: 'female', sample: 'Hallo, ich bin Eva. Schön, dass Sie hier sind.' },
-  { id: 'de_DE-kerstin-low', name: 'Kerstin', description: 'Weiblich, klar', gender: 'female', sample: 'Mein Name ist Kerstin. Ich stehe Ihnen gerne zur Verfügung.' },
   { id: 'de_DE-ramona-low', name: 'Ramona', description: 'Weiblich, warm', gender: 'female', sample: 'Hallo, hier spricht Ramona. Wie geht es Ihnen heute?' },
   { id: 'de_DE-karlsson-low', name: 'Karlsson', description: 'Männlich, tief', gender: 'male', sample: 'Guten Tag, Karlsson hier. Womit kann ich Ihnen dienen?' },
   { id: 'de_DE-pavoque-low', name: 'Pavoque', description: 'Männlich, professionell', gender: 'male', sample: 'Willkommen, ich bin Pavoque. Lassen Sie uns beginnen.' },
+  { id: 'de_DE-thorsten-medium', name: 'Thorsten', description: 'Männlich, neutral', gender: 'male', sample: 'Hallo, ich bin Thorsten. Wie kann ich Ihnen heute behilflich sein?' },
+  { id: 'de_DE-eva_k-x_low', name: 'Eva K', description: 'Weiblich, kompakt', gender: 'female', sample: 'Hallo, ich bin Eva. Schön, dass Sie hier sind.' },
 ]
 
 // Voice testing state

@@ -127,129 +127,66 @@
           </div>
         </div>
 
-        <!-- Step 3: Modell-Auswahl -->
+        <!-- Step 3: Modell-Auswahl (Vereinfacht: 3 Optionen) -->
         <div v-if="currentStep === 3" class="step-content model-step">
           <h2>🧠 {{ t('setup.model.title') }}</h2>
           <p>{{ t('setup.model.subtitle') }}</p>
 
-          <!-- Hardware-Warnung wenn RAM < 8GB und keine GPU -->
-          <div v-if="systemInfo && systemInfo.totalRamGB < 8 && !systemInfo.hasGpu" class="info-box warning">
-            <span class="icon">⛔</span>
-            <span>{{ t('setup.model.ramWarning', { ram: systemInfo.totalRamGB }) }}</span>
+          <!-- Hardware-Info (kompakt) -->
+          <div v-if="systemInfo" class="info-box info" style="margin-bottom: 20px;">
+            <span class="icon">{{ systemInfo.hasGpu ? '🚀' : '💻' }}</span>
+            <span v-if="systemInfo.hasGpu">
+              GPU: {{ systemInfo.gpuName }} ({{ systemInfo.gpuMemoryGB }} GB VRAM)
+            </span>
+            <span v-else>
+              CPU-Modus · {{ systemInfo.totalRamGB }} GB RAM
+            </span>
           </div>
 
-          <!-- CPU-Info Tabelle wenn keine GPU -->
-          <div v-if="systemInfo && !systemInfo.hasGpu && systemInfo.totalRamGB >= 8" class="cpu-info-card">
-            <h3>💡 {{ t('setup.model.cpuInfo.title') }}</h3>
-            <table class="cpu-comparison">
-              <thead>
-                <tr>
-                  <th>{{ t('setup.model.cpuInfo.model') }}</th>
-                  <th>{{ t('setup.model.cpuInfo.responseTime') }}</th>
-                  <th>{{ t('setup.model.cpuInfo.quality') }}</th>
-                  <th>{{ t('setup.model.cpuInfo.ram') }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr :class="{ 'recommended-row': systemInfo.totalRamGB >= 8 && systemInfo.totalRamGB < 16 }">
-                  <td><strong>1.5B</strong></td>
-                  <td>⚡ 2-5 {{ t('setup.model.seconds') }}</td>
-                  <td>{{ t('setup.model.qualities.simple') }}</td>
-                  <td>8 GB+</td>
-                </tr>
-                <tr :class="{ 'recommended-row': systemInfo.totalRamGB >= 16 && systemInfo.totalRamGB < 32 }">
-                  <td><strong>3B</strong></td>
-                  <td>⏱️ 5-15 {{ t('setup.model.seconds') }}</td>
-                  <td>{{ t('setup.model.qualities.everyday') }}</td>
-                  <td>16 GB+</td>
-                </tr>
-                <tr :class="{ 'recommended-row': systemInfo.totalRamGB >= 32 && systemInfo.totalRamGB < 48 }">
-                  <td><strong>7B</strong></td>
-                  <td>🕐 20-45 {{ t('setup.model.seconds') }}</td>
-                  <td>{{ t('setup.model.qualities.good') }}</td>
-                  <td>32 GB+</td>
-                </tr>
-                <tr :class="{ 'recommended-row': systemInfo.totalRamGB >= 32 && systemInfo.totalRamGB < 40 }">
-                  <td><strong>9B</strong> <small>(Gemma)</small></td>
-                  <td>🕐 30-60 {{ t('setup.model.seconds') }}</td>
-                  <td>{{ t('setup.model.qualities.veryGood') }}</td>
-                  <td>32 GB+</td>
-                </tr>
-                <tr :class="{ 'recommended-row': systemInfo.totalRamGB >= 40 && systemInfo.totalRamGB < 48 }">
-                  <td><strong>Phi-4</strong> <small>(Microsoft)</small></td>
-                  <td>🕐 45-75 {{ t('setup.model.seconds') }}</td>
-                  <td>{{ t('setup.model.qualities.strongReasoning') }}</td>
-                  <td>40 GB+</td>
-                </tr>
-                <tr :class="{ 'recommended-row': systemInfo.totalRamGB >= 48 && systemInfo.totalRamGB < 64 }">
-                  <td><strong>14B</strong></td>
-                  <td>🕐 60-90 {{ t('setup.model.seconds') }}</td>
-                  <td>{{ t('setup.model.qualities.premium') }}</td>
-                  <td>48 GB+</td>
-                </tr>
-                <tr :class="{ 'recommended-row': systemInfo.totalRamGB >= 64 }">
-                  <td><strong>32B</strong></td>
-                  <td>🕐 2-3 {{ t('setup.model.minutes') }}</td>
-                  <td>{{ t('setup.model.qualities.best') }}</td>
-                  <td>64 GB+</td>
-                </tr>
-              </tbody>
-            </table>
-            <p class="cpu-hint">{{ t('setup.model.cpuInfo.hint') }}</p>
-          </div>
-
-          <!-- GPU-Info wenn GPU vorhanden -->
-          <div v-if="systemInfo && systemInfo.hasGpu" class="gpu-info-card">
-            <h3>🚀 {{ t('setup.model.gpuInfo.title', { gpu: systemInfo.gpuName, vram: systemInfo.gpuMemoryGB }) }}</h3>
-            <table class="gpu-comparison">
-              <thead>
-                <tr><th>{{ t('setup.model.cpuInfo.model') }}</th><th>{{ t('setup.model.gpuInfo.vram') }}</th><th>{{ t('setup.model.gpuInfo.speed') }}</th></tr>
-              </thead>
-              <tbody>
-                <tr :class="{ 'recommended-row': systemInfo.gpuMemoryGB >= 8 && systemInfo.gpuMemoryGB < 10 }">
-                  <td><strong>7B</strong></td><td>8 GB+</td><td>⚡ 15-25 t/s</td>
-                </tr>
-                <tr :class="{ 'recommended-row': systemInfo.gpuMemoryGB >= 10 && systemInfo.gpuMemoryGB < 12 }">
-                  <td><strong>9B</strong> <small>(Gemma)</small></td><td>10 GB+</td><td>⚡ 12-20 t/s</td>
-                </tr>
-                <tr :class="{ 'recommended-row': systemInfo.gpuMemoryGB >= 12 && systemInfo.gpuMemoryGB < 16 }">
-                  <td><strong>Phi-4</strong> <small>(Microsoft)</small></td><td>12 GB+</td><td>⚡ 10-18 t/s</td>
-                </tr>
-                <tr :class="{ 'recommended-row': systemInfo.gpuMemoryGB >= 16 && systemInfo.gpuMemoryGB < 24 }">
-                  <td><strong>14B</strong></td><td>16 GB+</td><td>⏱️ 10-18 t/s</td>
-                </tr>
-                <tr :class="{ 'recommended-row': systemInfo.gpuMemoryGB >= 24 }">
-                  <td><strong>32B</strong></td><td>24 GB+</td><td>🕐 5-10 t/s</td>
-                </tr>
-              </tbody>
-            </table>
-            <p class="gpu-hint">t/s = Tokens pro Sekunde. Wähle nur verfügbare Modelle!</p>
-          </div>
-
-          <div class="models-list">
+          <!-- Vereinfachte 3-Modell-Auswahl -->
+          <div class="campaign-models-grid">
             <div
               v-for="model in modelRecommendations"
               :key="model.modelId"
-              class="model-card"
+              class="campaign-model-card"
               :class="{
                 selected: selectedModel === model.modelId,
-                recommended: model.recommended,
-                disabled: !model.available
+                recommended: model.recommended
               }"
               @click="selectModel(model)"
             >
-              <div class="model-header">
-                <span class="model-name">{{ model.modelName }}</span>
-                <span v-if="model.recommended" class="recommended-badge">Empfohlen</span>
-                <span v-if="!model.available" class="unavailable-badge">Nicht verfügbar</span>
+              <!-- Kategorie-Icon -->
+              <div class="category-icon">
+                <span v-if="model.category === 'small'">🚀</span>
+                <span v-else-if="model.category === 'standard'">⭐</span>
+                <span v-else>🏆</span>
               </div>
-              <div class="model-details">
-                <span class="model-size">{{ model.sizeGB }} GB</span>
-                <span class="model-desc">{{ model.description }}</span>
+
+              <!-- Kategorie-Label -->
+              <div class="category-label">
+                <span v-if="model.category === 'small'">Klein</span>
+                <span v-else-if="model.category === 'standard'">Standard</span>
+                <span v-else>Groß</span>
               </div>
-              <div v-if="model.reason" class="model-reason" :class="{ 'reason-warning': !model.available }">{{ model.reason }}</div>
+
+              <!-- Modell-Name -->
+              <div class="model-name">{{ model.modelName }}</div>
+
+              <!-- Größe -->
+              <div class="model-size">{{ model.sizeGB }} GB</div>
+
+              <!-- Beschreibung -->
+              <div class="model-desc">{{ model.description }}</div>
+
+              <!-- Empfohlen Badge -->
+              <div v-if="model.recommended" class="recommended-badge">Empfohlen</div>
             </div>
           </div>
+
+          <!-- Hinweis: Später mehr Modelle -->
+          <p class="models-hint">
+            💡 Weitere Modelle können später im Model Manager heruntergeladen werden.
+          </p>
 
           <!-- Download Modal (wiederverwendete Komponente) -->
           <ModelDownloadModal
@@ -260,79 +197,49 @@
             :totalSize="formatBytes(downloadProgress.bytesTotal)"
             :speed="downloadProgress.speedMBps ? downloadProgress.speedMBps.toFixed(1) : '0.0'"
             :statusMessages="downloadStatusMessages"
+            :downloadType="currentDownloadType"
             @cancel="cancelDownload"
           />
         </div>
 
-        <!-- Step 4: Vision/Dokumentenerkennung -->
+        <!-- Step 4: Vision/Dokumentenerkennung (Vereinfacht: Ein/Aus Toggle) -->
         <div v-if="currentStep === 4" class="step-content vision-step">
           <h2>📷 {{ t('setup.vision.title') }}</h2>
           <p>{{ t('setup.vision.subtitle') }}</p>
 
-          <!-- Erklärung für User -->
-          <div class="info-box info" style="margin-bottom: 20px;">
+          <!-- Vision Feature Card mit Toggle -->
+          <div class="vision-feature-card" :class="{ enabled: visionEnabled }">
+            <div class="vision-header">
+              <div class="vision-icon">👁️</div>
+              <div class="vision-info">
+                <h3>MiniCPM-V 2.6</h3>
+                <p class="vision-size">5.4 GB Download · GPT-4V Niveau</p>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" v-model="visionEnabled" @change="handleVisionToggle">
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <!-- Features Liste -->
+            <div class="vision-features" :class="{ collapsed: !visionEnabled }">
+              <div class="feature-item">📄 Dokumente analysieren (Rechnungen, Briefe, Verträge)</div>
+              <div class="feature-item">✉️ Absender und Betreff aus Briefen extrahieren</div>
+              <div class="feature-item">🏷️ Dokumente automatisch kategorisieren</div>
+              <div class="feature-item">📷 Bilder beschreiben und verstehen</div>
+            </div>
+
+            <!-- Status Anzeige -->
+            <div class="vision-status">
+              <span v-if="visionEnabled" class="status-enabled">✅ Wird installiert</span>
+              <span v-else class="status-disabled">⏭️ Überspringen</span>
+            </div>
+          </div>
+
+          <!-- Hinweis wenn deaktiviert -->
+          <div v-if="!visionEnabled" class="info-box info" style="margin-top: 20px;">
             <span class="icon">💡</span>
-            <span>
-              <strong>{{ t('setup.vision.infoTitle') }}</strong><br>
-              • {{ t('setup.vision.infoList.documents') }}<br>
-              • {{ t('setup.vision.infoList.sender') }}<br>
-              • {{ t('setup.vision.infoList.priority') }}<br>
-              • {{ t('setup.vision.infoList.photos') }}
-            </span>
-          </div>
-
-          <!-- Wenn Vision-Optionen geladen -->
-          <div v-if="visionOptions">
-            <!-- Hardware-Warnung wenn keine Option verfügbar -->
-            <div v-if="!visionOptions.models?.some(m => m.available)" class="info-box warning">
-              <span class="icon">⚠️</span>
-              <span>{{ t('setup.vision.noResourcesWarning') }}</span>
-            </div>
-
-            <!-- Vision-Modell Auswahl -->
-            <div class="models-list">
-              <div
-                v-for="model in visionOptions.models"
-                :key="model.id"
-                class="model-card"
-                :class="{
-                  selected: selectedVisionModel === model.id,
-                  recommended: model.recommended,
-                  disabled: !model.available
-                }"
-                @click="selectVisionModel(model)"
-              >
-                <div class="model-header">
-                  <span class="model-name">{{ model.name }}</span>
-                  <span v-if="model.recommended && model.available" class="recommended-badge">{{ t('common.recommended') }}</span>
-                  <span v-if="!model.available" class="unavailable-badge">{{ model.unavailableReason || t('common.notAvailable') }}</span>
-                </div>
-                <div class="model-details">
-                  <span class="model-size">{{ (model.sizeMB / 1024).toFixed(1) }} GB</span>
-                  <span class="model-vram">VRAM: {{ model.minVramGB }} GB</span>
-                  <span class="model-ram">RAM: {{ model.minRamGB }} GB</span>
-                </div>
-                <div class="model-desc">{{ model.description }}</div>
-              </div>
-
-              <!-- Keine Vision Option -->
-              <div
-                class="model-card no-vision"
-                :class="{ selected: !visionEnabled && !selectedVisionModel }"
-                @click="skipVision"
-              >
-                <div class="model-header">
-                  <span class="model-name">⏭️ {{ t('setup.vision.skipOption.title') }}</span>
-                </div>
-                <div class="model-desc">{{ t('setup.vision.skipOption.description') }}</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Loading -->
-          <div v-else class="loading-spinner">
-            <div class="spinner"></div>
-            <span>{{ t('setup.vision.loading') }}</span>
+            <span>Vision kann später jederzeit im Model Manager aktiviert werden.</span>
           </div>
 
           <!-- Download Modal für Vision -->
@@ -344,6 +251,7 @@
             :totalSize="formatBytes(downloadProgress.bytesTotal)"
             :speed="downloadProgress.speedMBps ? downloadProgress.speedMBps.toFixed(1) : '0.0'"
             :statusMessages="downloadStatusMessages"
+            downloadType="vision"
             @cancel="cancelDownload"
           />
         </div>
@@ -398,22 +306,31 @@
                 <p v-else class="not-available">{{ t('setup.voice.whisper.notAvailable') }}</p>
               </div>
 
-              <!-- Piper (TTS) -->
+              <!-- Piper (TTS) - Mehrfachauswahl -->
               <div class="voice-section" :class="{ disabled: !voiceOptions.piperAvailable }">
                 <h3>🔊 {{ t('setup.voice.piper.title') }}</h3>
                 <p class="voice-section-desc">{{ t('setup.voice.piper.description') }}</p>
+                <p class="voice-hint">💡 Wähle mehrere Stimmen für verschiedene Experten (männlich + weiblich empfohlen)</p>
                 <div v-if="voiceOptions.piperAvailable" class="voice-models">
-                  <div
+                  <label
                     v-for="voice in voiceOptions.piperVoices"
                     :key="voice.id"
-                    class="voice-model-card"
-                    :class="{ selected: selectedPiperVoice === voice.id }"
-                    @click="selectedPiperVoice = voice.id"
+                    class="voice-model-card checkbox-card"
+                    :class="{ selected: selectedPiperVoices.includes(voice.id) }"
                   >
-                    <span class="model-name">{{ voice.name }}</span>
-                    <span class="model-size">{{ voice.sizeMB }} MB</span>
-                    <span class="model-desc">{{ voice.description }}</span>
-                  </div>
+                    <input
+                      type="checkbox"
+                      :value="voice.id"
+                      v-model="selectedPiperVoices"
+                      class="voice-checkbox"
+                    >
+                    <span class="checkbox-mark"></span>
+                    <div class="voice-info">
+                      <span class="model-name">{{ voice.name }}</span>
+                      <span class="model-size">{{ voice.sizeMB }} MB</span>
+                      <span class="model-desc">{{ voice.description }}</span>
+                    </div>
+                  </label>
                 </div>
                 <p v-else class="not-available">{{ t('setup.voice.piper.notAvailable') }}</p>
               </div>
@@ -434,43 +351,86 @@
             :totalSize="formatBytes(downloadProgress.bytesTotal)"
             :speed="downloadProgress.speedMBps ? downloadProgress.speedMBps.toFixed(1) : '0.0'"
             :statusMessages="downloadStatusMessages"
+            :downloadType="currentVoiceDownloadType"
             @cancel="cancelDownload"
           />
         </div>
 
-        <!-- Step 6: Fertig -->
+        <!-- Step 6: Fertig mit Disclaimer -->
         <div v-if="currentStep === 6" class="step-content complete-step">
-          <div class="complete-icon">{{ t('setup.complete.icon') }}</div>
-          <h2>{{ t('setup.complete.title') }}</h2>
-          <p>{{ t('setup.complete.subtitle') }}</p>
+          <div class="complete-icon">✅</div>
+          <h2>Installation abgeschlossen</h2>
+          <p>Alle Komponenten wurden erfolgreich eingerichtet</p>
 
-          <div class="summary-card">
-            <h3>{{ t('setup.complete.summary.title') }}</h3>
-            <div class="summary-row">
-              <span class="label">{{ t('setup.complete.summary.model') }}:</span>
-              <span class="value">{{ selectedModelName || t('setup.complete.summary.modelNone') }}</span>
+          <!-- Installierte Komponenten -->
+          <div class="installed-components">
+            <h3>📦 Installierte Komponenten</h3>
+
+            <div v-if="setupSummary" class="components-list">
+              <!-- LLM Modell -->
+              <div v-if="setupSummary.llmModel" class="component-row" :class="{ success: setupSummary.llmModel.installed }">
+                <span class="component-icon">{{ setupSummary.llmModel.installed ? '✅' : '❌' }}</span>
+                <span class="component-name">{{ setupSummary.llmModel.name }}</span>
+                <span class="component-desc">{{ setupSummary.llmModel.description }}</span>
+              </div>
+
+              <!-- llama-server -->
+              <div v-if="setupSummary.llamaServer" class="component-row" :class="{ success: setupSummary.llamaServer.installed }">
+                <span class="component-icon">{{ setupSummary.llamaServer.installed ? '✅' : '❌' }}</span>
+                <span class="component-name">{{ setupSummary.llamaServer.name }}</span>
+                <span class="component-desc">{{ setupSummary.llamaServer.description }}</span>
+              </div>
+
+              <!-- Vision Modell (optional) -->
+              <div v-if="setupSummary.visionModel" class="component-row" :class="{ success: setupSummary.visionModel.installed }">
+                <span class="component-icon">{{ setupSummary.visionModel.installed ? '✅' : '❌' }}</span>
+                <span class="component-name">{{ setupSummary.visionModel.name }}</span>
+                <span class="component-desc">{{ setupSummary.visionModel.description }}</span>
+              </div>
+
+              <!-- Whisper STT (optional) -->
+              <div v-if="setupSummary.whisperSTT" class="component-row" :class="{ success: setupSummary.whisperSTT.installed }">
+                <span class="component-icon">{{ setupSummary.whisperSTT.installed ? '✅' : '❌' }}</span>
+                <span class="component-name">{{ setupSummary.whisperSTT.name }}</span>
+                <span class="component-desc">{{ setupSummary.whisperSTT.description }}</span>
+              </div>
+
+              <!-- Piper TTS (optional) -->
+              <div v-if="setupSummary.piperTTS" class="component-row" :class="{ success: setupSummary.piperTTS.installed }">
+                <span class="component-icon">{{ setupSummary.piperTTS.installed ? '✅' : '❌' }}</span>
+                <span class="component-name">{{ setupSummary.piperTTS.name }}</span>
+                <span class="component-desc">{{ setupSummary.piperTTS.description }}</span>
+              </div>
+
+              <!-- Experten -->
+              <div v-if="setupSummary.experts" class="component-row" :class="{ success: setupSummary.experts.installed }">
+                <span class="component-icon">{{ setupSummary.experts.installed ? '✅' : '❌' }}</span>
+                <span class="component-name">{{ setupSummary.experts.name }}</span>
+                <span class="component-desc">{{ setupSummary.experts.description }}</span>
+              </div>
             </div>
-            <div class="summary-row">
-              <span class="label">{{ t('setup.complete.summary.vision') }}:</span>
-              <span class="value">
-                <template v-if="selectedVisionModel">{{ selectedVisionModelName }}</template>
-                <template v-else>{{ t('setup.complete.summary.visionNone') }}</template>
-              </span>
-            </div>
-            <div class="summary-row">
-              <span class="label">{{ t('setup.complete.summary.voice') }}:</span>
-              <span class="value">{{ voiceEnabled ? t('setup.complete.enabled') : t('setup.complete.comingSoon') }}</span>
+
+            <!-- Loading -->
+            <div v-else class="loading-spinner small">
+              <div class="spinner"></div>
+              <span>Lade Zusammenfassung...</span>
             </div>
           </div>
 
-          <div class="next-steps">
-            <h3>{{ t('setup.complete.nextSteps.title') }}</h3>
-            <ul>
-              <li v-if="!selectedModel">{{ t('setup.complete.nextSteps.downloadModel') }}</li>
-              <li>{{ t('setup.complete.nextSteps.startChat') }}</li>
-              <li>{{ t('setup.complete.nextSteps.createExperts') }}</li>
-              <li>{{ t('setup.complete.nextSteps.connectMates') }}</li>
-            </ul>
+          <!-- Rechtlicher Hinweis -->
+          <div class="disclaimer-section">
+            <div class="disclaimer-box">
+              <span class="disclaimer-icon">⚖️</span>
+              <p class="disclaimer-text">
+                {{ setupSummary?.disclaimerText || 'Die Experten im Fleet Navigator sind virtuelle Assistenzrollen. Sie unterstützen bei Analyse und Vorbereitung, ersetzen jedoch keine individuelle Fach- oder Rechtsberatung.' }}
+              </p>
+            </div>
+
+            <label class="disclaimer-checkbox">
+              <input type="checkbox" v-model="disclaimerAccepted">
+              <span class="checkmark"></span>
+              <span class="checkbox-label">Ich habe diesen Hinweis verstanden</span>
+            </label>
           </div>
         </div>
       </div>
@@ -508,9 +468,11 @@
         <button
           v-if="currentStep === 6"
           class="btn btn-primary btn-large"
+          :class="{ 'btn-disabled': !disclaimerAccepted }"
+          :disabled="!disclaimerAccepted"
           @click="finishSetup"
         >
-          🚀 {{ t('setup.complete.finishButton') }}
+          🚀 Fleet Navigator starten
         </button>
       </div>
     </div>
@@ -572,6 +534,9 @@ const selectedVisionModelName = computed(() => {
   return model ? model.name : selectedVisionModel.value
 })
 
+// Aktuell heruntergeladene Piper-Stimme (für Progress-Anzeige)
+const currentPiperVoiceDownload = ref('')
+
 // Computed: Name des aktuellen Voice-Downloads
 const currentVoiceDownload = computed(() => {
   if (!voiceOptions.value) return ''
@@ -580,8 +545,8 @@ const currentVoiceDownload = computed(() => {
     const model = voiceOptions.value.whisperModels?.find(m => m.id === selectedWhisperModel.value)
     return model ? `Whisper ${model.name}` : 'Whisper'
   }
-  if (downloadingPiper.value) {
-    const voice = voiceOptions.value.piperVoices?.find(v => v.id === selectedPiperVoice.value)
+  if (downloadingPiper.value && currentPiperVoiceDownload.value) {
+    const voice = voiceOptions.value.piperVoices?.find(v => v.id === currentPiperVoiceDownload.value)
     return voice ? `Piper ${voice.name}` : 'Piper'
   }
   return ''
@@ -591,16 +556,28 @@ const currentVoiceDownload = computed(() => {
 const downloadingWhisper = ref(false)
 const downloadingPiper = ref(false)
 
+// Download-Type für kontextbezogene Hilfe-Links im Modal
+const currentDownloadType = ref('llm') // 'llm', 'llama-server', 'vision', 'whisper', 'piper'
+const currentVoiceDownloadType = computed(() => {
+  if (downloadingWhisper.value) return 'whisper'
+  if (downloadingPiper.value) return 'piper'
+  return 'whisper'
+})
+
 // Voice Options
 const voiceOptions = ref(null)
 const voiceEnabled = ref(false)
 const selectedWhisperModel = ref('base')
-const selectedPiperVoice = ref('de_DE-thorsten-medium')
+const selectedPiperVoices = ref(['de_DE-kerstin-low', 'de_DE-thorsten-high']) // Standard: beide Stimmen (höchste Qualität)
 
 // Vision Options (Dokumentenerkennung)
 const visionOptions = ref(null)
 const visionEnabled = ref(true) // Standard: aktiviert
 const selectedVisionModel = ref('')
+
+// Setup Summary & Disclaimer
+const setupSummary = ref(null)
+const disclaimerAccepted = ref(false)
 
 // API Base URL
 const API_BASE = ''
@@ -619,10 +596,12 @@ onMounted(async () => {
   }
 })
 
-// Sprache auswählen
+// Sprache auswählen - Klick auf Flagge wählt sofort und geht weiter
 function selectLanguage(lang) {
   selectedLocale.value = lang
   setLocale(lang)
+  // Automatisch zum nächsten Schritt (Willkommen)
+  currentStep.value++
 }
 
 // Navigation
@@ -663,9 +642,20 @@ async function nextStep() {
   // Step 5: Voice → Step 6: Complete
   if (currentStep.value === 5) {
     await saveVoiceSettings()
+    await loadSetupSummary()
   }
 
   currentStep.value++
+}
+
+// Setup-Zusammenfassung laden
+async function loadSetupSummary() {
+  try {
+    const resp = await fetch(`${API_BASE}/api/setup/summary`)
+    setupSummary.value = await resp.json()
+  } catch (e) {
+    console.error('Setup Summary Fehler:', e)
+  }
 }
 
 function prevStep() {
@@ -710,22 +700,39 @@ async function loadSystemInfo() {
 async function loadModelRecommendations() {
   isLoading.value = true
   try {
-    const resp = await fetch(`${API_BASE}/api/setup/model-recommendations`)
-    modelRecommendations.value = await resp.json()
+    // Vereinfachte 3-Modell-Auswahl für Kampagne
+    const resp = await fetch(`${API_BASE}/api/setup/campaign-models`)
+    const data = await resp.json()
 
-    // Auto-Select empfohlenes Modell (nur wenn verfügbar)
-    const recommended = modelRecommendations.value.find(m => m.recommended && m.available)
+    // Campaign-Models in das erwartete Format umwandeln
+    modelRecommendations.value = data.models.map(m => ({
+      modelId: m.id,
+      modelName: m.name,
+      sizeGB: m.sizeGB,
+      description: m.description,
+      recommended: m.recommended,
+      available: true, // Campaign-Models sind immer verfügbar
+      category: m.category
+    }))
+
+    // Auto-Select empfohlenes Modell (Standard: Llama 8B)
+    const recommended = modelRecommendations.value.find(m => m.recommended)
     if (recommended) {
       selectedModel.value = recommended.modelId
-    } else {
-      // Fallback: Erstes verfügbares Modell auswählen
-      const firstAvailable = modelRecommendations.value.find(m => m.available)
-      if (firstAvailable) {
-        selectedModel.value = firstAvailable.modelId
-      }
     }
   } catch (e) {
-    console.error('Model Recommendations Fehler:', e)
+    console.error('Campaign Models Fehler:', e)
+    // Fallback: Alte model-recommendations API
+    try {
+      const resp = await fetch(`${API_BASE}/api/setup/model-recommendations`)
+      modelRecommendations.value = await resp.json()
+      const recommended = modelRecommendations.value.find(m => m.recommended && m.available)
+      if (recommended) {
+        selectedModel.value = recommended.modelId
+      }
+    } catch (e2) {
+      console.error('Model Recommendations Fallback Fehler:', e2)
+    }
   }
   isLoading.value = false
 }
@@ -873,6 +880,17 @@ function skipVision() {
   selectedVisionModel.value = ''
 }
 
+// Vision Toggle Handler für vereinfachtes Setup
+function handleVisionToggle() {
+  if (visionEnabled.value) {
+    // Vision aktiviert - MiniCPM-V 2.6 als Standard (beste OCR & Dokumentenerkennung)
+    selectedVisionModel.value = 'minicpm-v-2.6'
+  } else {
+    // Vision deaktiviert
+    selectedVisionModel.value = ''
+  }
+}
+
 function selectModel(model) {
   // Nur auswählbar wenn verfügbar
   if (!model.available) {
@@ -893,6 +911,7 @@ async function downloadModel() {
   }
 
   isDownloading.value = true
+  currentDownloadType.value = 'llm' // Initial: LLM-Download
   downloadProgress.value = { message: 'Starte Setup...', percent: 0, bytesTotal: 0, bytesDone: 0, speedMBps: 0 }
   downloadStatusMessages.value = ['Setup wird vorbereitet...']
 
@@ -927,6 +946,7 @@ async function downloadModel() {
 
     if (!serverStatus.installed) {
       console.log('[Setup] Step 3: llama-server NOT installed, starting download...')
+      currentDownloadType.value = 'llama-server' // Wechsel zu Engine-Download
       downloadStatusMessages.value.push('⬇️ ' + t('setup.model.downloadingEngine'))
 
       await new Promise((resolve, reject) => {
@@ -970,6 +990,7 @@ async function downloadModel() {
 
     // Schritt 3: KI-Modell herunterladen
     console.log('[Setup] Step 4: Starting model download')
+    currentDownloadType.value = 'llm' // Zurück zu LLM-Download
     downloadStatusMessages.value.push('⬇️ ' + t('setup.model.downloadingModel'))
     downloadProgress.value = { ...downloadProgress.value, message: t('setup.model.downloadingModel'), percent: 42 }
 
@@ -1038,7 +1059,7 @@ async function saveVoiceSettings() {
         body: JSON.stringify({
           enabled: false,
           whisperModel: '',
-          piperVoice: ''
+          piperVoices: []
         })
       })
     } catch (e) {
@@ -1060,21 +1081,34 @@ async function saveVoiceSettings() {
       downloadingWhisper.value = false
     }
 
-    // Piper downloaden (wenn verfügbar und ausgewählt)
-    if (voiceOptions.value?.piperAvailable && selectedPiperVoice.value) {
+    // Alle ausgewählten Piper-Stimmen downloaden
+    if (voiceOptions.value?.piperAvailable && selectedPiperVoices.value.length > 0) {
       downloadingPiper.value = true
-      await downloadVoiceComponent('piper', selectedPiperVoice.value)
+
+      for (let i = 0; i < selectedPiperVoices.value.length; i++) {
+        const voiceId = selectedPiperVoices.value[i]
+        currentPiperVoiceDownload.value = voiceId
+
+        const voiceName = voiceOptions.value.piperVoices?.find(v => v.id === voiceId)?.name || voiceId
+        downloadStatusMessages.value.push(`🔊 Lade Stimme ${i + 1}/${selectedPiperVoices.value.length}: ${voiceName}`)
+
+        await downloadVoiceComponent('piper', voiceId)
+      }
+
+      currentPiperVoiceDownload.value = ''
       downloadingPiper.value = false
     }
 
-    // Settings speichern
+    // Settings speichern (erste Stimme als Default)
+    const defaultVoice = selectedPiperVoices.value[0] || 'de_DE-kerstin-low'
     await fetch(`${API_BASE}/api/setup/select-voice`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         enabled: voiceEnabled.value,
         whisperModel: selectedWhisperModel.value,
-        piperVoice: selectedPiperVoice.value
+        piperVoice: defaultVoice,
+        piperVoices: selectedPiperVoices.value
       })
     })
 
@@ -1087,6 +1121,7 @@ async function saveVoiceSettings() {
   isDownloading.value = false
   downloadingWhisper.value = false
   downloadingPiper.value = false
+  currentPiperVoiceDownload.value = ''
 }
 
 // Voice-Komponente (Whisper oder Piper) downloaden
@@ -1153,11 +1188,25 @@ async function skipSetup() {
 }
 
 async function finishSetup() {
+  // Prüfen ob Disclaimer akzeptiert wurde
+  if (!disclaimerAccepted.value) {
+    alert('Bitte bestätigen Sie den rechtlichen Hinweis, um fortzufahren.')
+    return
+  }
+
   isDownloading.value = true
   downloadProgress.value = { message: 'Schließe Setup ab...', percent: 0 }
   downloadStatusMessages.value = ['🚀 Finalisiere Setup...']
 
   try {
+    // Schritt 0: Disclaimer-Akzeptanz speichern
+    downloadStatusMessages.value.push('⚖️ Speichere Bestätigung...')
+    await fetch(`${API_BASE}/api/setup/accept-disclaimer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accepted: true })
+    })
+
     // Schritt 1: Setup abschließen (Dateien schreiben, etc.)
     downloadStatusMessages.value.push('📝 Speichere Einstellungen...')
     const resp = await fetch(`${API_BASE}/api/setup/complete`, { method: 'POST' })
@@ -1692,6 +1741,104 @@ function formatBytes(bytes) {
   color: #f59e0b;
 }
 
+/* Campaign Models Grid (Vereinfacht: 3 Karten) */
+.campaign-models-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.campaign-model-card {
+  background: #2d2d44;
+  border: 3px solid transparent;
+  border-radius: 16px;
+  padding: 24px 16px;
+  cursor: pointer;
+  transition: all 0.3s;
+  text-align: center;
+  position: relative;
+}
+
+.campaign-model-card:hover {
+  border-color: #4f46e5;
+  transform: translateY(-4px);
+}
+
+.campaign-model-card.selected {
+  border-color: #4f46e5;
+  background: #3d3d5c;
+  transform: translateY(-4px);
+}
+
+.campaign-model-card.recommended {
+  border-color: #10b981;
+}
+
+.campaign-model-card.recommended.selected {
+  border-color: #10b981;
+  background: #1e4a3f;
+}
+
+.campaign-model-card .category-icon {
+  font-size: 36px;
+  margin-bottom: 8px;
+}
+
+.campaign-model-card .category-label {
+  color: #888;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+
+.campaign-model-card .model-name {
+  color: #fff;
+  font-weight: 600;
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+
+.campaign-model-card .model-size {
+  color: #4f46e5;
+  font-weight: 600;
+  font-size: 16px;
+  margin-bottom: 12px;
+}
+
+.campaign-model-card .model-desc {
+  color: #888;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.campaign-model-card .recommended-badge {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  background: #10b981;
+  color: #fff;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.models-hint {
+  color: #666;
+  font-size: 13px;
+  text-align: center;
+  margin-top: 20px;
+}
+
+@media (max-width: 600px) {
+  .campaign-models-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* GPU Info Card */
 .gpu-info-card {
   background: #064e3b;
@@ -1792,6 +1939,86 @@ function formatBytes(bytes) {
 .model-card.no-vision.selected {
   border-color: #666;
   background: #3d3d4a;
+}
+
+/* Vision Feature Card (Vereinfacht) */
+.vision-feature-card {
+  background: #2d2d44;
+  border: 3px solid #444;
+  border-radius: 16px;
+  padding: 24px;
+  transition: all 0.3s;
+}
+
+.vision-feature-card.enabled {
+  border-color: #10b981;
+  background: #1e4a3f;
+}
+
+.vision-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.vision-icon {
+  font-size: 48px;
+}
+
+.vision-info {
+  flex: 1;
+}
+
+.vision-info h3 {
+  color: #fff;
+  font-size: 20px;
+  margin: 0 0 4px 0;
+}
+
+.vision-size {
+  color: #888;
+  font-size: 14px;
+  margin: 0;
+}
+
+.vision-features {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #444;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: all 0.3s;
+  max-height: 200px;
+  overflow: hidden;
+}
+
+.vision-features.collapsed {
+  max-height: 0;
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.feature-item {
+  color: #ccc;
+  font-size: 14px;
+  padding-left: 8px;
+}
+
+.vision-status {
+  margin-top: 16px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.status-enabled {
+  color: #10b981;
+  font-weight: 500;
+}
+
+.status-disabled {
+  color: #888;
 }
 
 /* Voice Step */
@@ -1909,6 +2136,58 @@ input:checked + .slider:before {
 .voice-model-card .model-desc {
   color: #666;
   font-size: 11px;
+}
+
+/* Voice Checkbox Cards */
+.voice-hint {
+  color: #10b981;
+  font-size: 13px;
+  margin-bottom: 12px;
+  background: rgba(16, 185, 129, 0.1);
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+
+.checkbox-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.checkbox-card .voice-checkbox {
+  display: none;
+}
+
+.checkbox-card .checkbox-mark {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  border: 2px solid #666;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  margin-top: 2px;
+}
+
+.checkbox-card.selected .checkbox-mark {
+  background: #10b981;
+  border-color: #10b981;
+}
+
+.checkbox-card.selected .checkbox-mark::after {
+  content: '✓';
+  color: #fff;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.checkbox-card .voice-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .not-available {
@@ -2093,6 +2372,150 @@ input:checked + .slider:before {
   to { transform: rotate(360deg); }
 }
 
+/* Installed Components */
+.installed-components {
+  background: #2d2d44;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.installed-components h3 {
+  color: #fff;
+  font-size: 16px;
+  margin-bottom: 15px;
+}
+
+.components-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.component-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 15px;
+  background: #1e1e2e;
+  border-radius: 8px;
+  border-left: 3px solid #666;
+}
+
+.component-row.success {
+  border-left-color: #10b981;
+}
+
+.component-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.component-name {
+  color: #fff;
+  font-weight: 500;
+  min-width: 180px;
+}
+
+.component-desc {
+  color: #888;
+  font-size: 13px;
+}
+
+/* Disclaimer Section */
+.disclaimer-section {
+  margin-top: 20px;
+}
+
+.disclaimer-box {
+  background: linear-gradient(135deg, #2d3748 0%, #1e2a3a 100%);
+  border-left: 4px solid #f59e0b;
+  border-radius: 8px;
+  padding: 20px;
+  display: flex;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.disclaimer-icon {
+  font-size: 32px;
+  flex-shrink: 0;
+}
+
+.disclaimer-text {
+  color: #e2e8f0;
+  font-size: 15px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.disclaimer-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  padding: 15px 20px;
+  background: #1e1e2e;
+  border-radius: 8px;
+  border: 2px solid #333;
+  transition: all 0.2s;
+}
+
+.disclaimer-checkbox:hover {
+  border-color: #4f46e5;
+}
+
+.disclaimer-checkbox input {
+  display: none;
+}
+
+.disclaimer-checkbox .checkmark {
+  width: 24px;
+  height: 24px;
+  border: 2px solid #666;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.disclaimer-checkbox input:checked + .checkmark {
+  background: #10b981;
+  border-color: #10b981;
+}
+
+.disclaimer-checkbox input:checked + .checkmark::after {
+  content: '✓';
+  color: #fff;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.checkbox-label {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+/* Button disabled state */
+.btn-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #666 !important;
+}
+
+/* Small loading spinner */
+.loading-spinner.small {
+  padding: 20px;
+}
+
+.loading-spinner.small .spinner {
+  width: 24px;
+  height: 24px;
+}
+
 /* Responsive */
 @media (max-width: 600px) {
   .setup-wizard {
@@ -2109,6 +2532,19 @@ input:checked + .slider:before {
   .wizard-header {
     flex-direction: column;
     gap: 15px;
+  }
+
+  .component-row {
+    flex-wrap: wrap;
+  }
+
+  .component-name {
+    min-width: auto;
+  }
+
+  .component-desc {
+    width: 100%;
+    margin-top: 5px;
   }
 }
 </style>
