@@ -115,6 +115,34 @@ func (e *Expert) GetFullPrompt(mode *ExpertMode) string {
 		prompt += mode.Prompt
 	}
 
+	// WICHTIG: LLM-Halluzinationen von Quellen verhindern
+	if e.AutoWebSearch {
+		if e.WebSearchShowLinks {
+			// Web-Suche MIT Quellen-Anzeige: Nur ECHTE Quellen zitieren
+			prompt += `
+
+## WICHTIG - Quellen-Regel:
+Du hast Zugriff auf Web-Suche, aber NIEMALS darfst du Quellen erfinden!
+- Zitiere NUR Quellen/Links die dir das Web-Such-System explizit bereitstellt
+- Wenn du keine Web-Suche durchgeführt hast → KEINE Quellen angeben
+- Erfinde NIEMALS URLs oder Referenzen aus deinem Gedächtnis
+- Bei Fragen über dich selbst oder allgemeinem Wissen: Antworte OHNE Quellen`
+		} else {
+			// Web-Suche OHNE Quellen-Anzeige (reines RAG): Inhalte nutzen, aber KEINE Verweise
+			prompt += `
+
+## WICHTIG - Keine Quellenverweise!
+Du nutzt Web-Recherche als Hintergrundwissen, aber:
+- Füge KEINE Quellenverweise wie [1], [2] etc. in deine Antwort ein
+- Nenne KEINE URLs oder Links
+- Antworte direkt und flüssig ohne Quellenangaben
+- Nutze die recherchierten Informationen natürlich in deiner Antwort`
+		}
+	} else {
+		// Keine Websuche → Niemals Quellen
+		prompt += "\n\n## WICHTIG - Keine Quellen!\nDu hast KEINE Websuche-Fähigkeit. Gib NIEMALS Quellen, Referenzen oder nummerierte Links an. Wenn du etwas nicht weißt, sage ehrlich: 'Das weiß ich leider nicht.'"
+	}
+
 	return prompt
 }
 

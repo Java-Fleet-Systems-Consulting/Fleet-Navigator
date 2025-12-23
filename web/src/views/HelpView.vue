@@ -534,6 +534,122 @@
             <p><strong>Vorteil:</strong> Das Analyse-Modell kann ein kleineres, schnelleres Modell sein - die schwere Arbeit (Bilderkennung) macht das spezialisierte Vision-Modell.</p>
           </div>
         </div>
+
+        <!-- RAG & Websuche -->
+        <div v-if="currentTopic === 'rag'" class="topic-article">
+          <h1>🔍 RAG & Websuche</h1>
+
+          <div class="intro-box">
+            <p><strong>RAG</strong> (Retrieval Augmented Generation) erweitert die KI mit aktuellem Wissen aus dem Web - ohne die Daten dauerhaft zu speichern.</p>
+          </div>
+
+          <h2>Was ist RAG?</h2>
+          <div class="chain-diagram">
+            <div class="chain-step">
+              <span class="step-icon">❓</span>
+              <span class="step-label">Deine Frage</span>
+            </div>
+            <span class="chain-arrow">→</span>
+            <div class="chain-step">
+              <span class="step-icon">🔍</span>
+              <span class="step-label">Web-Suche</span>
+              <span class="step-desc">Aktuelle Infos holen</span>
+            </div>
+            <span class="chain-arrow">→</span>
+            <div class="chain-step">
+              <span class="step-icon">🧠</span>
+              <span class="step-label">KI + Kontext</span>
+              <span class="step-desc">Antwort generieren</span>
+            </div>
+            <span class="chain-arrow">→</span>
+            <div class="chain-step">
+              <span class="step-icon">💬</span>
+              <span class="step-label">Antwort</span>
+            </div>
+          </div>
+
+          <p class="explanation">
+            Die KI sucht zuerst im Web nach relevanten Informationen und nutzt diese als <em>Kontext</em> für die Antwort.
+            So kann sie auch über aktuelle Ereignisse sprechen, die nach ihrem Training passiert sind.
+          </p>
+
+          <h2>Die Quellen-Einstellung</h2>
+          <div class="comparison-box">
+            <div class="compare-item local">
+              <h4>✅ Quellen-Links anzeigen</h4>
+              <p class="setting-desc">Die Standardeinstellung</p>
+              <ul>
+                <li>Antwort enthält <code>[1]</code>, <code>[2]</code> Referenzen</li>
+                <li>Am Ende werden Quellen-Links angezeigt</li>
+                <li>Du kannst nachprüfen woher die Info stammt</li>
+                <li>Transparenz und Nachvollziehbarkeit</li>
+              </ul>
+              <div class="example-box">
+                <strong>Beispiel-Antwort:</strong>
+                <p>"Laut aktuellen Berichten [1] ist der DAX heute um 2% gestiegen..."</p>
+                <p class="sources">Quellen: [1] finanzen.net/dax...</p>
+              </div>
+            </div>
+            <div class="compare-item cloud">
+              <h4>🔇 Nur RAG (ohne Links)</h4>
+              <p class="setting-desc">Für sauberen Text</p>
+              <ul>
+                <li>Web-Inhalte werden genutzt</li>
+                <li>Aber KEINE Links in der Antwort</li>
+                <li>Keine <code>[1]</code>, <code>[2]</code> Referenzen</li>
+                <li>Flüssiger, natürlicher Text</li>
+              </ul>
+              <div class="example-box">
+                <strong>Beispiel-Antwort:</strong>
+                <p>"Der DAX ist heute um 2% gestiegen, angetrieben durch positive Quartalszahlen..."</p>
+                <p class="no-sources">(Keine Quellenangaben)</p>
+              </div>
+            </div>
+          </div>
+
+          <h2>Wann welche Einstellung?</h2>
+          <div class="use-cases">
+            <div class="use-case local">
+              <h4>✅ Mit Quellen-Links</h4>
+              <ul>
+                <li>Recherche & Faktenfindung</li>
+                <li>Wenn du Quellen überprüfen willst</li>
+                <li>Für Berichte mit Quellenangaben</li>
+                <li>Bei kritischen Informationen</li>
+              </ul>
+            </div>
+            <div class="use-case cloud">
+              <h4>🔇 Ohne Quellen-Links</h4>
+              <ul>
+                <li>Texte für Präsentationen</li>
+                <li>Natürlich klingende Antworten</li>
+                <li>Wenn du die Info nur brauchst, nicht die Quelle</li>
+                <li>Für saubere Exports</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="info-callout">
+            <span class="callout-icon">⚙️</span>
+            <div>
+              <p><strong>Einstellung pro Experte:</strong></p>
+              <p>Du findest die Option "Quellen-Links anzeigen" in den Experten-Einstellungen unter <em>RAG & Websuche</em>. Jeder Experte kann eigene Einstellungen haben!</p>
+            </div>
+          </div>
+
+          <h2>Wichtig: Keine erfundenen Quellen!</h2>
+          <div class="info-callout success">
+            <span class="callout-icon">🛡️</span>
+            <div>
+              <p>Fleet Navigator verhindert, dass die KI Quellen <strong>erfindet</strong>.</p>
+              <ul>
+                <li>Quellen werden nur angezeigt wenn tatsächlich gesucht wurde</li>
+                <li>Bei einfachen Fragen ("Wer bist du?") → Keine Quellen</li>
+                <li>Keine halluzinierten URLs aus dem Training</li>
+              </ul>
+            </div>
+          </div>
+        </div>
       </article>
     </main>
   </div>
@@ -554,7 +670,8 @@ const topics = [
   { id: 'local', name: 'Lokal vs. Cloud', icon: '💻' },
   { id: 'experts', name: 'Fokussierte Experten', icon: '👨‍💼' },
   { id: 'voice', name: 'Voice (Whisper/Piper)', icon: '🎤' },
-  { id: 'chaining', name: 'Vision Chaining', icon: '🔗' }
+  { id: 'chaining', name: 'Vision Chaining', icon: '🔗' },
+  { id: 'rag', name: 'RAG & Websuche', icon: '🔍' }
 ]
 
 const currentTopic = ref('vision')
@@ -1243,6 +1360,56 @@ function closeHelp() {
 .explanation {
   color: #94a3b8;
   line-height: 1.6;
+}
+
+/* RAG-specific styles */
+.setting-desc {
+  color: #94a3b8;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.example-box {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  padding: 15px;
+  margin-top: 15px;
+}
+
+.example-box strong {
+  color: #fff;
+  font-size: 13px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.example-box p {
+  margin: 0;
+  font-size: 14px;
+  color: #c4b5fd;
+  font-style: italic;
+}
+
+.example-box .sources {
+  margin-top: 10px;
+  color: #10b981;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.example-box .no-sources {
+  margin-top: 10px;
+  color: #94a3b8;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.compare-item code {
+  background: rgba(79, 70, 229, 0.3);
+  color: #c4b5fd;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 13px;
 }
 
 /* Responsive */

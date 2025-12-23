@@ -1160,6 +1160,7 @@ var MirrorConfig = struct {
 	VisionPath      string // z.B. /vision/
 	WhisperPath     string // z.B. /whisper/
 	PiperPath       string // z.B. /piper/
+	TesseractPath   string // z.B. /tesseract/
 	// Speed-basiertes Fallback
 	MinSpeedMBps       float64 // Minimale Geschwindigkeit bevor Fallback (MB/s)
 	SpeedCheckAfterSec int     // Nach wie vielen Sekunden Geschwindigkeit prüfen
@@ -1176,6 +1177,7 @@ var MirrorConfig = struct {
 	VisionPath:            "/vision/",
 	WhisperPath:           "/whisper/",
 	PiperPath:             "/piper/",
+	TesseractPath:         "/tesseract/",
 	MinSpeedMBps:          12.0, // Fallback zu Mirror wenn < 12 MB/s (normal: 80 MB/s)
 	SpeedCheckAfterSec:    5,    // Geschwindigkeit nach 5 Sekunden prüfen
 	FallbackToGitHub:      true,
@@ -4216,6 +4218,258 @@ voiceDone:
 	}
 
 	log.Printf("[Piper] ✅ Installiert: %s", piperDir)
+	return nil
+}
+
+// DownloadTesseract lädt Tesseract OCR (Binary + Sprachpakete) herunter
+// Tesseract wird als ZIP vom Mirror geladen und entpackt
+func (d *VoiceModelDownloader) DownloadTesseract(progressCh chan<- SetupProgress) error {
+	tesseractDir := filepath.Join(d.dataDir, "tesseract")
+	if err := os.MkdirAll(tesseractDir, 0755); err != nil {
+		return fmt.Errorf("Verzeichnis erstellen: %w", err)
+	}
+
+	// Prüfen ob bereits installiert
+	var binaryName string
+	switch runtime.GOOS {
+	case "windows":
+		binaryName = "tesseract.exe"
+	default:
+		binaryName = "tesseract"
+	}
+
+	binaryPath := filepath.Join(tesseractDir, binaryName)
+	if _, err := os.Stat(binaryPath); err == nil {
+		log.Printf("[Tesseract] Bereits installiert: %s", binaryPath)
+		progressCh <- SetupProgress{
+			Step:    "tesseract",
+			Message: "Tesseract OCR bereits installiert!",
+			Percent: 100,
+			Done:    true,
+		}
+		return nil
+	}
+
+	progressCh <- SetupProgress{
+		Step:    "tesseract",
+		Message: "Lade Tesseract OCR...",
+		Percent: 0,
+	}
+
+	// Download-URL basierend auf Betriebssystem
+	var zipURL string
+	var zipName string
+
+	switch runtime.GOOS {
+	case "windows":
+		// Portable Tesseract für Windows vom Mirror
+		zipURL = MirrorConfig.BaseURL + MirrorConfig.TesseractPath + "tesseract-ocr-windows-x64.zip"
+		zipName = "tesseract-ocr-windows-x64.zip"
+	case "darwin":
+		// macOS - Homebrew empfohlen, aber Mirror als Option
+		zipURL = MirrorConfig.BaseURL + MirrorConfig.TesseractPath + "tesseract-ocr-macos-arm64.tar.gz"
+		zipName = "tesseract-ocr-macos.tar.gz"
+	default:
+		// Linux - apt/dnf empfohlen
+		zipURL = MirrorConfig.BaseURL + MirrorConfig.TesseractPath + "tesseract-ocr-linux-x64.tar.gz"
+		zipName = "tesseract-ocr-linux.tar.gz"
+	}
+
+	zipPath := filepath.Join(tesseractDir, zipName)
+	var lastErr error
+
+	// Download mit Retry
+	for retry := 0; retry < 3; retry++ {
+		if retry > 0 {
+			log.Printf("[Tesseract] Retry %d/3...", retry+1)
+			time.Sleep(time.Duration(retry) * time.Second)
+		}
+
+		progressCh <- SetupProgress{
+			Step:    "tesseract",
+			Message: fmt.Sprintf("Lade Tesseract OCR... (Versuch %d/3)", retry+1),
+			Percent: 5,
+		}
+
+		err := d.downloadFile(zipURL, zipPath, progressCh, 5, 70)
+		if err == nil {
+			log.Printf("[Tesseract] ✅ Download erfolgreich: %s", zipURL)
+			goto downloadDone
+		}
+		lastErr = err
+		log.Printf("[Tesseract] ⚠️ Download fehlgeschlagen: %v", err)
+	}
+	return fmt.Errorf("Tesseract-Download fehlgeschlagen: %w", lastErr)
+
+downloadDone:
+	// Entpacken
+	progressCh <- SetupProgress{
+		Step:    "tesseract",
+		Message: "Entpacke Tesseract OCR...",
+		Percent: 75,
+	}
+
+	if runtime.GOOS == "windows" {
+		// ZIP entpacken
+		if err := d.extractZipToDir(zipPath, tesseractDir); err != nil {
+			os.Remove(zipPath)
+			return fmt.Errorf("ZIP entpacken: %w", err)
+		}
+	} else {
+		// TAR.GZ entpacken
+		if err := d.extractTarGzToDir(zipPath, tesseractDir); err != nil {
+			os.Remove(zipPath)
+			return fmt.Errorf("TAR.GZ entpacken: %w", err)
+		}
+	}
+
+	// ZIP/TAR löschen
+	os.Remove(zipPath)
+
+	// Prüfen ob Binary existiert
+	if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
+		// Vielleicht ist es in einem Unterordner?
+		// Suche nach tesseract.exe
+		var foundPath string
+		filepath.Walk(tesseractDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return nil
+			}
+			if info.Name() == binaryName {
+				foundPath = path
+				return filepath.SkipAll
+			}
+			return nil
+		})
+
+		if foundPath != "" {
+			log.Printf("[Tesseract] Binary gefunden in Unterordner: %s", foundPath)
+			// Binary ist in einem Unterordner - das ist okay
+		} else {
+			return fmt.Errorf("tesseract binary nicht gefunden nach Entpacken")
+		}
+	}
+
+	// Unter Unix ausführbar machen
+	if runtime.GOOS != "windows" {
+		os.Chmod(binaryPath, 0755)
+	}
+
+	progressCh <- SetupProgress{
+		Step:    "tesseract",
+		Message: "Tesseract OCR erfolgreich installiert!",
+		Percent: 100,
+		Done:    true,
+	}
+
+	log.Printf("[Tesseract] ✅ Installiert: %s", tesseractDir)
+	return nil
+}
+
+// extractZipToDir entpackt ein ZIP-Archiv in ein Verzeichnis
+func (d *VoiceModelDownloader) extractZipToDir(zipPath, destDir string) error {
+	r, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	for _, f := range r.File {
+		fpath := filepath.Join(destDir, f.Name)
+
+		// Sicherheitscheck: Pfad darf nicht außerhalb von destDir sein
+		if !strings.HasPrefix(fpath, filepath.Clean(destDir)+string(os.PathSeparator)) {
+			return fmt.Errorf("ungültiger Pfad in ZIP: %s", f.Name)
+		}
+
+		if f.FileInfo().IsDir() {
+			os.MkdirAll(fpath, os.ModePerm)
+			continue
+		}
+
+		// Elternverzeichnis erstellen
+		if err := os.MkdirAll(filepath.Dir(fpath), os.ModePerm); err != nil {
+			return err
+		}
+
+		outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+		if err != nil {
+			return err
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			outFile.Close()
+			return err
+		}
+
+		_, err = io.Copy(outFile, rc)
+		outFile.Close()
+		rc.Close()
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// extractTarGzToDir entpackt ein TAR.GZ-Archiv in ein Verzeichnis
+func (d *VoiceModelDownloader) extractTarGzToDir(tarGzPath, destDir string) error {
+	file, err := os.Open(tarGzPath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	gzr, err := gzip.NewReader(file)
+	if err != nil {
+		return err
+	}
+	defer gzr.Close()
+
+	tr := tar.NewReader(gzr)
+
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		fpath := filepath.Join(destDir, header.Name)
+
+		// Sicherheitscheck
+		if !strings.HasPrefix(fpath, filepath.Clean(destDir)+string(os.PathSeparator)) {
+			return fmt.Errorf("ungültiger Pfad in TAR: %s", header.Name)
+		}
+
+		switch header.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(fpath, 0755); err != nil {
+				return err
+			}
+		case tar.TypeReg:
+			if err := os.MkdirAll(filepath.Dir(fpath), 0755); err != nil {
+				return err
+			}
+
+			outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, os.FileMode(header.Mode))
+			if err != nil {
+				return err
+			}
+
+			if _, err := io.Copy(outFile, tr); err != nil {
+				outFile.Close()
+				return err
+			}
+			outFile.Close()
+		}
+	}
+
 	return nil
 }
 
