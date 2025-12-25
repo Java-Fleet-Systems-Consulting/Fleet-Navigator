@@ -239,7 +239,7 @@
           <!-- Hinweis wenn deaktiviert -->
           <div v-if="!visionEnabled" class="info-box info" style="margin-top: 20px;">
             <span class="icon">💡</span>
-            <span>Vision kann später jederzeit im Model Manager aktiviert werden.</span>
+            <span>Ohne Vision-Modell wird <strong>Tesseract OCR</strong> für Dokumente verwendet. Vision kann später in den <strong>Einstellungen</strong> heruntergeladen werden.</span>
           </div>
 
           <!-- Download Modal für Vision -->
@@ -570,9 +570,9 @@ const voiceEnabled = ref(false)
 const selectedWhisperModel = ref('base')
 const selectedPiperVoices = ref(['de_DE-kerstin-low', 'de_DE-thorsten-high']) // Standard: beide Stimmen (höchste Qualität)
 
-// Vision Options (Dokumentenerkennung)
+// Vision Options (Dokumentenerkennung) - Standard: DEAKTIVIERT (wie Voice)
 const visionOptions = ref(null)
-const visionEnabled = ref(true) // Standard: aktiviert
+const visionEnabled = ref(false) // Standard: deaktiviert - User muss explizit aktivieren
 const selectedVisionModel = ref('')
 
 // Setup Summary & Disclaimer
@@ -752,20 +752,16 @@ async function loadVisionOptions() {
     const resp = await fetch(`${API_BASE}/api/setup/vision-options`)
     visionOptions.value = await resp.json()
 
-    // Auto-Select empfohlenes Vision-Modell (nur wenn verfügbar)
+    // Vision NICHT automatisch aktivieren - User muss explizit aktivieren (wie bei Voice)
+    // Aber das empfohlene Modell vorselektieren für den Fall dass User aktiviert
     if (visionOptions.value?.models) {
       const recommended = visionOptions.value.models.find(m => m.recommended && m.available)
       if (recommended) {
         selectedVisionModel.value = recommended.id
-        visionEnabled.value = true
-      } else {
-        // Kein verfügbares Modell
-        const anyAvailable = visionOptions.value.models.find(m => m.available)
-        if (!anyAvailable) {
-          visionEnabled.value = false
-        }
+        // visionEnabled bleibt false - User muss explizit aktivieren
       }
     }
+    // visionEnabled bleibt bei false (Standardwert)
   } catch (e) {
     console.error('Vision Options Fehler:', e)
   }
@@ -1050,8 +1046,15 @@ function cancelDownload() {
 }
 
 async function saveVoiceSettings() {
+  console.log('[Voice] saveVoiceSettings aufgerufen')
+  console.log('[Voice] voiceEnabled:', voiceEnabled.value)
+  console.log('[Voice] voiceOptions:', voiceOptions.value)
+  console.log('[Voice] selectedWhisperModel:', selectedWhisperModel.value)
+  console.log('[Voice] selectedPiperVoices:', selectedPiperVoices.value)
+
   // Wenn Voice deaktiviert, nur speichern
   if (!voiceEnabled.value) {
+    console.log('[Voice] Voice DEAKTIVIERT - überspringe Downloads')
     try {
       await fetch(`${API_BASE}/api/setup/select-voice`, {
         method: 'POST',
@@ -1068,6 +1071,8 @@ async function saveVoiceSettings() {
     return
   }
 
+  console.log('[Voice] Voice AKTIVIERT - starte Downloads')
+
   // Voice aktiviert - Downloads starten
   isDownloading.value = true
   downloadProgress.value = { message: t('setup.voice.startingDownload'), percent: 0 }
@@ -1075,14 +1080,21 @@ async function saveVoiceSettings() {
 
   try {
     // Whisper downloaden (wenn verfügbar und ausgewählt)
+    console.log('[Voice] Whisper Check: available=', voiceOptions.value?.whisperAvailable, 'model=', selectedWhisperModel.value)
     if (voiceOptions.value?.whisperAvailable && selectedWhisperModel.value) {
+      console.log('[Voice] Starte Whisper Download:', selectedWhisperModel.value)
       downloadingWhisper.value = true
       await downloadVoiceComponent('whisper', selectedWhisperModel.value)
+      console.log('[Voice] Whisper Download fertig')
       downloadingWhisper.value = false
+    } else {
+      console.log('[Voice] Whisper Download übersprungen')
     }
 
     // Alle ausgewählten Piper-Stimmen downloaden
+    console.log('[Voice] Piper Check: available=', voiceOptions.value?.piperAvailable, 'voices=', selectedPiperVoices.value)
     if (voiceOptions.value?.piperAvailable && selectedPiperVoices.value.length > 0) {
+      console.log('[Voice] Starte Piper Downloads für', selectedPiperVoices.value.length, 'Stimmen')
       downloadingPiper.value = true
 
       for (let i = 0; i < selectedPiperVoices.value.length; i++) {
@@ -1090,13 +1102,17 @@ async function saveVoiceSettings() {
         currentPiperVoiceDownload.value = voiceId
 
         const voiceName = voiceOptions.value.piperVoices?.find(v => v.id === voiceId)?.name || voiceId
+        console.log('[Voice] Lade Piper Stimme', i + 1, ':', voiceId)
         downloadStatusMessages.value.push(`🔊 Lade Stimme ${i + 1}/${selectedPiperVoices.value.length}: ${voiceName}`)
 
         await downloadVoiceComponent('piper', voiceId)
+        console.log('[Voice] Piper Stimme fertig:', voiceId)
       }
 
       currentPiperVoiceDownload.value = ''
       downloadingPiper.value = false
+    } else {
+      console.log('[Voice] Piper Download übersprungen')
     }
 
     // Settings speichern (erste Stimme als Default)
@@ -2233,6 +2249,12 @@ input:checked + .slider:before {
   color: #fff;
   font-size: 24px;
   margin-bottom: 10px;
+}
+
+.complete-step > p {
+  color: #94a3b8;
+  font-size: 16px;
+  margin-bottom: 20px;
 }
 
 .summary-card {

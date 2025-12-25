@@ -434,10 +434,6 @@
       "themeDefaultDesc": "Mor vurgulu koyu tasarım",
       "themeLawyer": "Avukat",
       "themeLawyerDesc": "Navy Blue ve Gold ile açık tasarım",
-      "showTopBar": "Üst Çubuğu Göster",
-      "showTopBarDesc": "Model seçimi ve düğmelerle üst gezinme çubuğunu göster",
-      "showWelcomeTiles": "Hoş Geldin Görünümü",
-      "showWelcomeTilesDesc": "Hoş geldin ekranında logo, ipuçları ve öneriler gösterir",
       "showModeSwitchMessages": "Mod değişikliklerini göster",
       "showModeSwitchMessagesDesc": "Uzman otomatik olarak bakış açısını değiştirdiğinde bildirimleri gösterir",
       "fontSize": "Yazı Boyutu",
@@ -559,6 +555,12 @@
       "setAsDefaultLabel": "Varsayılan istem olarak ayarla",
       "setAsDefaultHint": "Bu istem yeni sohbetler için otomatik olarak kullanılacak",
       "update": "Güncelle"
+    },
+    "customModels": {
+      "title": "Özel Model",
+      "subtitle": "Özel modeller için sistem istemleri ve örnekleme parametreleri",
+      "samplingTitle": "LLM Örnekleme Parametreleri",
+      "samplingDesc": "Metin oluşturmayı ince ayarlayın - Bu parametreler modelin ne kadar yaratıcı veya belirleyici yanıt vereceğini etkiler"
     },
     "privacy": {
       "title": "Gizlilik",
@@ -1454,6 +1456,8 @@
     "startRecording": "Sesli giriş başlat",
     "openModelManager": "Model yöneticisini aç",
     "openSettings": "Ayarları aç",
+    "openMates": "Fleet Mates'i aç",
+    "openInfo": "Bilgi & Sürüm",
     "noExperts": "Uzman bulunamadı.",
     "createInManager": "Uzman Yöneticisi'nde bir tane oluşturun.",
     "themeSelect": "Tema seç",
@@ -1793,5 +1797,17 @@
     "serverRunning": "Sunucu çalışıyor! FleetCode ve sohbet artık kullanılabilir.",
     "selectModelFirst": "Lütfen bir model seçin!",
     "startError": "Başlatma hatası"
+  },
+  "infoDialog": {
+    "title": "Fleet Navigator Hakkında",
+    "subtitle": "Yapay zeka destekli Uzman Sistemi",
+    "version": "Sürüm",
+    "buildTime": "Derleme Tarihi",
+    "checkUpdate": "Güncellemeleri Kontrol Et",
+    "checking": "Güncellemeler kontrol ediliyor...",
+    "checkFailed": "Güncelleme kontrolü başarısız",
+    "newVersion": "Yeni sürüm",
+    "viewRelease": "Sürümü görüntüle",
+    "madeWith": "Go & Vue.js ile yapıldı"
   }
 }

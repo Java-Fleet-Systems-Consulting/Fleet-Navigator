@@ -1147,12 +1147,12 @@ func (h *APIHandler) RegisterRoutes(mux *http.ServeMux) {
 // ---- Model Downloader Adapter ----
 
 // MirrorConfig enthält die Konfiguration für den Download-Mirror
-// Strategie: Original-Quellen (HuggingFace/GitHub) → Mirror-Fallback bei langsamer Verbindung
-// Wenn Download-Geschwindigkeit unter MinSpeedMBps fällt, wird zum Mirror gewechselt
+// Strategie: Mirror ZUERST (schneller, stabiler) → HuggingFace/GitHub als Fallback
+// Bei Mirror-Fehlern wird automatisch auf Original-Quellen gewechselt
 var MirrorConfig = struct {
 	// BaseURL ist die Basis-URL des Mirrors
 	BaseURL string
-	// Enabled aktiviert den Mirror als Fallback-Quelle
+	// Enabled aktiviert den Mirror als primäre Quelle
 	Enabled bool
 	// Komponenten-spezifische Pfade
 	LlamaServerPath string // z.B. /llama-server/latest/
@@ -1194,6 +1194,7 @@ var MirrorAssetMapping = map[string]string{
 	"win-vulkan-x64":    "win-vulkan-x64.zip",
 	"win-cpu-x64":       "win-cpu-x64.zip",
 	// Linux
+	"ubuntu-cuda-x64":   "ubuntu-cuda-12.4-x64.tar.gz", // NVIDIA CUDA Version
 	"ubuntu-vulkan-x64": "ubuntu-vulkan-x64.tar.gz",
 	"ubuntu-x64":        "ubuntu-x64.tar.gz",
 	// macOS
@@ -1392,7 +1393,7 @@ func (d *HuggingFaceDownloader) getHuggingFaceURL(modelID string) string {
 }
 
 // DownloadModel lädt ein Modell herunter
-// Strategie: Mirror ZUERST (schneller) → HuggingFace-Fallback bei Fehler
+// Strategie: Mirror ZUERST (schneller, stabiler) → HuggingFace-Fallback bei Fehler
 // Bei Vision-Modellen wird automatisch auch die mmproj-Datei mitgeladen
 // Unterstützt Multi-Connection-Downloads für große Dateien (>100MB)
 func (d *HuggingFaceDownloader) DownloadModel(modelID string, progressCh chan<- SetupProgress) error {
@@ -1410,44 +1411,57 @@ func (d *HuggingFaceDownloader) DownloadModel(modelID string, progressCh chan<- 
 		return fmt.Errorf("Verzeichnis erstellen: %w", err)
 	}
 
-	// HuggingFace URL (Fallback)
-	huggingfaceURL := d.getHuggingFaceURL(modelID)
-
-	// Mirror URL (Fallback)
+	// Mirror URL (primär)
 	var mirrorURL string
 	if MirrorConfig.Enabled {
 		mirrorURL = MirrorConfig.BaseURL + MirrorConfig.ModelsPath + modelID
-		log.Printf("[Setup] 🚀 Primäre Download URL (HuggingFace): %s", huggingfaceURL)
-		log.Printf("[Setup] Fallback URL (Mirror): %s", mirrorURL)
+	}
+
+	// HuggingFace URL (Fallback)
+	huggingfaceURL := d.getHuggingFaceURL(modelID)
+
+	if MirrorConfig.Enabled {
+		log.Printf("[Setup] 🚀 Primäre Download URL (Mirror): %s", mirrorURL)
+		log.Printf("[Setup] Fallback URL (HuggingFace): %s", huggingfaceURL)
 	} else {
 		log.Printf("[Setup] Primäre Download URL: %s", huggingfaceURL)
 	}
 
 	var err error
 
-	// Strategie: HuggingFace ZUERST (bessere CDN-Infrastruktur), Mirror als Fallback
-	progressCh <- SetupProgress{
-		Step:    "model",
-		Message: "Lade von HuggingFace...",
-		Percent: 0,
-	}
-	_, err = d.tryDownloadWithSpeedCheck(huggingfaceURL, destPath, modelID, progressCh, lang)
-
-	if err == nil {
-		log.Printf("[Setup] ✅ Download von HuggingFace erfolgreich!")
-		return nil
-	}
-
-	// HuggingFace fehlgeschlagen - Fallback zu Mirror
+	// Strategie: Mirror ZUERST (schneller, stabiler), HuggingFace als Fallback
 	if MirrorConfig.Enabled && mirrorURL != "" {
-		log.Printf("[Setup] ⚠️ HuggingFace fehlgeschlagen (%v), wechsle zu Mirror...", err)
-		os.Remove(destPath) // Teildatei löschen
 		progressCh <- SetupProgress{
 			Step:    "model",
-			Message: "HuggingFace nicht erreichbar, wechsle zu Mirror...",
+			Message: "Lade von Mirror...",
 			Percent: 0,
 		}
 		_, err = d.tryDownloadWithSpeedCheck(mirrorURL, destPath, modelID, progressCh, lang)
+
+		if err == nil {
+			log.Printf("[Setup] ✅ Download von Mirror erfolgreich!")
+			return nil
+		}
+
+		// Mirror fehlgeschlagen - Fallback zu HuggingFace
+		if MirrorConfig.FallbackToHuggingFace {
+			log.Printf("[Setup] ⚠️ Mirror fehlgeschlagen (%v), wechsle zu HuggingFace...", err)
+			os.Remove(destPath) // Teildatei löschen
+			progressCh <- SetupProgress{
+				Step:    "model",
+				Message: "Mirror nicht erreichbar, wechsle zu HuggingFace...",
+				Percent: 0,
+			}
+			_, err = d.tryDownloadWithSpeedCheck(huggingfaceURL, destPath, modelID, progressCh, lang)
+		}
+	} else {
+		// Mirror deaktiviert - direkt von HuggingFace
+		progressCh <- SetupProgress{
+			Step:    "model",
+			Message: "Lade von HuggingFace...",
+			Percent: 0,
+		}
+		_, err = d.tryDownloadWithSpeedCheck(huggingfaceURL, destPath, modelID, progressCh, lang)
 	}
 
 	return err
@@ -1575,7 +1589,7 @@ func (d *HuggingFaceDownloader) downloadModelSingle(url, destPath, modelID strin
 		log.Printf("[Setup] ❌ Download fehlgeschlagen: %s", errMsg)
 
 		if resp.StatusCode == 404 {
-			return fmt.Errorf(tf(lang, "model_not_found", modelID))
+			return fmt.Errorf("%s", tf(lang, "model_not_found", modelID))
 		}
 		return fmt.Errorf("Download-Fehler (HTTP %d): %s", resp.StatusCode, errMsg)
 	}
@@ -1959,6 +1973,8 @@ func (d *LlamaServerDownloader) GetMirrorAssetKey(gpuType GPUType) string {
 		}
 	case "linux":
 		switch gpuType {
+		case GPUTypeCUDA:
+			return "ubuntu-cuda-x64"
 		case GPUTypeVulkan:
 			return "ubuntu-vulkan-x64"
 		default:
@@ -3238,13 +3254,13 @@ func GetVisionModelURLs(modelID string) *VisionModelInfo {
 }
 
 // DownloadVisionModel lädt ein Vision-Modell herunter (Modell + mmproj)
-// Strategie: HuggingFace zuerst → Mirror-Fallback bei langsamer Verbindung
+// Strategie: Mirror ZUERST (schneller, stabiler) → HuggingFace-Fallback bei Fehler
 // Gibt die installierten Pfade zurück für Settings-Konfiguration
 func (d *VisionModelDownloader) DownloadVisionModel(modelID string, progressCh chan<- SetupProgress) (*VisionDownloadResult, error) {
 	lang := d.getLangOrDefault()
 	info := GetVisionModelURLs(modelID)
 	if info == nil {
-		return nil, fmt.Errorf(tf(lang, "unknown_vision_model", modelID))
+		return nil, fmt.Errorf("%s", tf(lang, "unknown_vision_model", modelID))
 	}
 
 	visionDir := filepath.Join(d.modelsDir, "vision")
@@ -3303,34 +3319,39 @@ func (d *VisionModelDownloader) DownloadVisionModel(modelID string, progressCh c
 	}, nil
 }
 
-// downloadWithMirrorFirst lädt eine Datei - HuggingFace ZUERST (bessere CDN), Mirror als Fallback
+// downloadWithMirrorFirst lädt eine Datei - Mirror ZUERST (schneller, stabiler), HuggingFace als Fallback
 func (d *VisionModelDownloader) downloadWithMirrorFirst(mirrorURL, huggingfaceURL, destPath, component string, progressCh chan<- SetupProgress, startPercent, endPercent float64) error {
-	// Strategie: HuggingFace ZUERST (bessere CDN-Infrastruktur), Mirror als Fallback
+	// Strategie: Mirror ZUERST (schneller, stabiler), HuggingFace als Fallback
+	if mirrorURL != "" && MirrorConfig.Enabled {
+		progressCh <- SetupProgress{
+			Step:    "vision",
+			Message: "Lade von Mirror...",
+			Percent: startPercent,
+		}
+		err := d.downloadFile(mirrorURL, destPath, component, progressCh, startPercent, endPercent)
+		if err == nil {
+			log.Printf("[Vision] ✅ Download von Mirror erfolgreich: %s", component)
+			return nil
+		}
+
+		// Mirror fehlgeschlagen - Fallback zu HuggingFace
+		log.Printf("[Vision] ⚠️ Mirror fehlgeschlagen (%v), wechsle zu HuggingFace...", err)
+		os.Remove(destPath) // Teildatei löschen
+		progressCh <- SetupProgress{
+			Step:    "vision",
+			Message: "Mirror nicht erreichbar, wechsle zu HuggingFace...",
+			Percent: startPercent,
+		}
+		return d.downloadFile(huggingfaceURL, destPath, component, progressCh, startPercent, endPercent)
+	}
+
+	// Kein Mirror verfügbar - direkt von HuggingFace
 	progressCh <- SetupProgress{
 		Step:    "vision",
 		Message: "Lade von HuggingFace...",
 		Percent: startPercent,
 	}
-	err := d.downloadFile(huggingfaceURL, destPath, component, progressCh, startPercent, endPercent)
-	if err == nil {
-		log.Printf("[Vision] ✅ Download von HuggingFace erfolgreich: %s", component)
-		return nil
-	}
-
-	// HuggingFace fehlgeschlagen - Fallback zu Mirror
-	if mirrorURL != "" && MirrorConfig.Enabled {
-		log.Printf("[Vision] ⚠️ HuggingFace fehlgeschlagen (%v), wechsle zu Mirror...", err)
-		os.Remove(destPath) // Teildatei löschen
-		progressCh <- SetupProgress{
-			Step:    "vision",
-			Message: "HuggingFace nicht erreichbar, wechsle zu Mirror...",
-			Percent: startPercent,
-		}
-		return d.downloadFile(mirrorURL, destPath, component, progressCh, startPercent, endPercent)
-	}
-
-	// Kein Mirror verfügbar - ursprünglichen Fehler zurückgeben
-	return err
+	return d.downloadFile(huggingfaceURL, destPath, component, progressCh, startPercent, endPercent)
 }
 
 // downloadFile lädt eine Datei mit Progress herunter
@@ -3981,8 +4002,8 @@ binaryDone:
 	// Modell-Dateiname (z.B. ggml-base.bin, ggml-small.bin)
 	modelFile := fmt.Sprintf("ggml-%s.bin", model)
 	modelURLs := []string{
-		fmt.Sprintf("https://huggingface.co/ggerganov/whisper.cpp/resolve/main/%s", modelFile), // HuggingFace zuerst
-		MirrorConfig.BaseURL + MirrorConfig.WhisperPath + "models/" + modelFile,               // Mirror Fallback
+		MirrorConfig.BaseURL + MirrorConfig.WhisperPath + modelFile,                            // Mirror zuerst (keine /models/ Subdirectory)
+		fmt.Sprintf("https://huggingface.co/ggerganov/whisper.cpp/resolve/main/%s", modelFile), // HuggingFace Fallback
 	}
 	modelPath := filepath.Join(whisperDir, modelFile)
 
@@ -4161,14 +4182,14 @@ binaryDone:
 		hfVoicePath = fmt.Sprintf("%s/%s/%s/%s/%s", lang, locale, speaker, quality, voice)
 	}
 
-	// HuggingFace zuerst, dann Mirror Fallback
+	// Mirror zuerst, dann HuggingFace Fallback
 	var onnxURLs []string
+	onnxURLs = append(onnxURLs,
+		MirrorConfig.BaseURL+MirrorConfig.PiperPath+"voices/"+voiceOnnx) // Mirror zuerst
 	if hfVoicePath != "" {
 		onnxURLs = append(onnxURLs,
-			fmt.Sprintf("https://huggingface.co/rhasspy/piper-voices/resolve/main/%s.onnx", hfVoicePath)) // HuggingFace zuerst
+			fmt.Sprintf("https://huggingface.co/rhasspy/piper-voices/resolve/main/%s.onnx", hfVoicePath)) // HuggingFace Fallback
 	}
-	onnxURLs = append(onnxURLs,
-		MirrorConfig.BaseURL+MirrorConfig.PiperPath+"voices/"+voiceOnnx) // Mirror Fallback
 
 	onnxPath := filepath.Join(voicesDir, voiceOnnx)
 
@@ -4193,14 +4214,14 @@ binaryDone:
 	return fmt.Errorf("Voice-Download fehlgeschlagen (alle Quellen versucht): %w", lastErr)
 
 voiceDone:
-	// JSON-Config (optional) - HuggingFace zuerst, Mirror Fallback
+	// JSON-Config (optional) - Mirror zuerst, HuggingFace Fallback
 	var jsonURLs []string
+	jsonURLs = append(jsonURLs,
+		MirrorConfig.BaseURL+MirrorConfig.PiperPath+"voices/"+voiceJson) // Mirror zuerst
 	if hfVoicePath != "" {
 		jsonURLs = append(jsonURLs,
-			fmt.Sprintf("https://huggingface.co/rhasspy/piper-voices/resolve/main/%s.onnx.json", hfVoicePath)) // HuggingFace zuerst
+			fmt.Sprintf("https://huggingface.co/rhasspy/piper-voices/resolve/main/%s.onnx.json", hfVoicePath)) // HuggingFace Fallback
 	}
-	jsonURLs = append(jsonURLs,
-		MirrorConfig.BaseURL+MirrorConfig.PiperPath+"voices/"+voiceJson) // Mirror Fallback
 
 	jsonPath := filepath.Join(voicesDir, voiceJson)
 	for _, url := range jsonURLs {

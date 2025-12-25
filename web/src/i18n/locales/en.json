@@ -434,10 +434,6 @@
       "themeDefaultDesc": "Dark design with purple accents",
       "themeLawyer": "Lawyer",
       "themeLawyerDesc": "Light design with Navy Blue & Gold",
-      "showTopBar": "Show TopBar",
-      "showTopBarDesc": "Show the top navigation bar with model selection and buttons",
-      "showWelcomeTiles": "Welcome Display",
-      "showWelcomeTilesDesc": "Shows logo, tips and suggestions on the welcome screen",
       "showModeSwitchMessages": "Show mode switches",
       "showModeSwitchMessagesDesc": "Shows notifications when an expert automatically changes perspective",
       "fontSize": "Font Size",
@@ -559,6 +555,12 @@
       "setAsDefaultLabel": "Set as default prompt",
       "setAsDefaultHint": "This prompt will be automatically used for new chats",
       "update": "Update"
+    },
+    "customModels": {
+      "title": "Custom Model",
+      "subtitle": "System prompts and sampling parameters for custom models",
+      "samplingTitle": "LLM Sampling Parameters",
+      "samplingDesc": "Fine-tune text generation - These parameters affect how creative or deterministic the model responds"
     },
     "privacy": {
       "title": "Privacy",
@@ -1410,6 +1412,8 @@
     "startRecording": "Start voice input",
     "openModelManager": "Open model manager",
     "openSettings": "Open settings",
+    "openMates": "Open Fleet Mates",
+    "openInfo": "Info & Version",
     "noExperts": "No experts available.",
     "createInManager": "Create one in the Expert Manager.",
     "themeSelect": "Select theme",
@@ -1749,5 +1753,17 @@
     "serverRunning": "Server running! FleetCode and chat are now available.",
     "selectModelFirst": "Please select a model!",
     "startError": "Error starting"
+  },
+  "infoDialog": {
+    "title": "About Fleet Navigator",
+    "subtitle": "AI-powered Expert System",
+    "version": "Version",
+    "buildTime": "Build Date",
+    "checkUpdate": "Check for Updates",
+    "checking": "Checking for updates...",
+    "checkFailed": "Update check failed",
+    "newVersion": "New version",
+    "viewRelease": "View release",
+    "madeWith": "Made with Go & Vue.js"
   }
 }

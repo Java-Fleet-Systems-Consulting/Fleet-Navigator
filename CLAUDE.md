@@ -665,6 +665,95 @@ ModelService
 | Vision/LLaVA | ✅ Vollständig | ✅ Implementiert |
 | Chat-Streaming | ✅ SSE | ✅ SSE mit korrektem Protokoll |
 
+## Unit-Tests (PFLICHT ab 25.12.2024)
+
+### Regel
+**Ab sofort werden für ALLE neuen Funktionen Unit-Tests geschrieben!**
+Bei Änderungen an bestehenden Funktionen werden ebenfalls Unit-Tests nachgerüstet.
+
+### Go Testing
+
+```bash
+# Alle Tests ausführen
+go test ./...
+
+# Tests mit Coverage
+go test -cover ./...
+
+# Einzelnes Package testen
+go test ./internal/llamaserver/
+
+# Verbose Output
+go test -v ./internal/setup/
+```
+
+### Test-Datei Konvention
+
+```
+internal/
+├── llamaserver/
+│   ├── server.go
+│   └── server_test.go      # Tests für server.go
+├── setup/
+│   ├── handlers.go
+│   └── handlers_test.go    # Tests für handlers.go
+└── vision/
+    ├── vision.go
+    └── vision_test.go      # Tests für vision.go
+```
+
+### Test-Beispiel
+
+```go
+// internal/llamaserver/server_test.go
+package llamaserver
+
+import (
+    "testing"
+)
+
+func TestGetOrExtractLlamaServer(t *testing.T) {
+    // Test mit existierendem Verzeichnis
+    binPath, libPath, err := GetOrExtractLlamaServer("/tmp/test-data")
+    if err != nil {
+        t.Errorf("Unexpected error: %v", err)
+    }
+    // Weitere Assertions...
+}
+
+func TestServerStart(t *testing.T) {
+    // Test-Setup
+    srv := NewServer(DefaultConfig("/tmp/test"))
+
+    // Test ohne Modell sollte Fehler geben
+    err := srv.Start("")
+    if err == nil {
+        t.Error("Expected error when starting without model")
+    }
+}
+```
+
+### Frontend Testing (Vitest)
+
+```bash
+cd web
+npm run test        # Tests ausführen
+npm run test:watch  # Watch-Modus
+npm run coverage    # Coverage-Report
+```
+
+### Was muss getestet werden?
+
+| Priorität | Komponente | Grund |
+|-----------|------------|-------|
+| **HOCH** | API-Endpoints | Öffentliche Schnittstelle |
+| **HOCH** | Business-Logik | Kernfunktionalität |
+| **MITTEL** | Helper-Funktionen | Wiederverwendbarkeit |
+| **MITTEL** | Error-Handling | Robustheit |
+| **NIEDRIG** | UI-Komponenten | Visuell prüfbar |
+
+---
+
 ## Entwicklung
 
 ### Neue Module hinzufügen

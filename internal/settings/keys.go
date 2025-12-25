@@ -13,12 +13,10 @@ const (
 
 // --- UI Settings ---
 const (
-	KeyUITheme              = "ui.theme"                  // UI-Theme (tech-dark, etc.)
-	KeyDarkMode             = "ui.darkMode"               // Dark Mode aktiviert
-	KeyShowWelcomeTiles     = "ui.showWelcomeTiles"       // Willkommens-Kacheln anzeigen
-	KeyShowTopBar           = "ui.showTopBar"             // TopBar anzeigen (Debug)
-	KeyFontSize             = "ui.fontSize"               // Schriftgröße (50-150%)
-	KeyWebSearchAnimation   = "ui.webSearchAnimation"     // Web-Suche Animation (data-wave, orbit, radar, constellation)
+	KeyUITheme            = "ui.theme"              // UI-Theme (tech-dark, etc.)
+	KeyDarkMode           = "ui.darkMode"           // Dark Mode aktiviert
+	KeyFontSize           = "ui.fontSize"           // Schriftgröße (50-150%)
+	KeyWebSearchAnimation = "ui.webSearchAnimation" // Web-Suche Animation (data-wave, orbit, radar, constellation)
 )
 
 // --- Expert Settings ---

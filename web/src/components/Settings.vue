@@ -28,46 +28,6 @@
             {{ t('settings.general.title') }}
           </h2>
 
-          <!-- TopBar Toggle -->
-          <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
-            <div>
-              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                {{ t('settings.general.showTopBar') }}
-              </label>
-              <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                {{ t('settings.general.showTopBarDesc') }}
-              </p>
-            </div>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                v-model="settingsStore.settings.showTopBar"
-                class="sr-only peer"
-              >
-              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-            </label>
-          </div>
-
-          <!-- Welcome Tiles Toggle -->
-          <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg mt-4">
-            <div>
-              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                {{ t('settings.general.showWelcomeTiles') }}
-              </label>
-              <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                {{ t('settings.general.showWelcomeTilesDesc') }}
-              </p>
-            </div>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                v-model="settingsStore.settings.showWelcomeTiles"
-                class="sr-only peer"
-              >
-              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-            </label>
-          </div>
-
           <!-- UI Theme Selection -->
           <div class="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg mt-4">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -542,6 +502,98 @@
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- Vision Model Download Section -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div class="flex items-start justify-between mb-4">
+            <div>
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                👁️ Vision-Modell herunterladen
+              </h2>
+              <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                KI-gestützte Bildanalyse für Dokumente (Rechnungen, Briefe, Verträge)
+              </p>
+            </div>
+          </div>
+
+          <!-- Status: Vision Model installiert -->
+          <div v-if="visionModelStatus.installed" class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-4">
+            <div class="flex items-center gap-3">
+              <span class="text-2xl">✅</span>
+              <div>
+                <p class="font-medium text-green-800 dark:text-green-200">
+                  Vision-Modell installiert: {{ visionModelStatus.modelName }}
+                </p>
+                <p class="text-xs text-green-600 dark:text-green-400 mt-1">
+                  Bildanalyse und Dokumentenerkennung verfügbar
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Status: Kein Vision Model -->
+          <div v-else class="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4 mb-4">
+            <div class="flex items-center gap-3">
+              <span class="text-2xl">⚠️</span>
+              <div>
+                <p class="font-medium text-orange-800 dark:text-orange-200">
+                  Kein Vision-Modell installiert
+                </p>
+                <p class="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                  Aktuell wird <strong>Tesseract OCR</strong> für Dokumententext verwendet. Für KI-Bildanalyse Vision-Modell herunterladen.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Download Button (wenn nicht installiert) -->
+          <div v-if="!visionModelStatus.installed && !visionDownloadProgress.active">
+            <div class="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg mb-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="font-medium text-gray-900 dark:text-white">MiniCPM-V 2.6</p>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">5.4 GB · GPT-4V Niveau · Beste OCR-Erkennung</p>
+                </div>
+                <button
+                  @click="downloadVisionModel"
+                  class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors flex items-center gap-2"
+                >
+                  <span>⬇️</span>
+                  Herunterladen
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Download Progress -->
+          <div v-if="visionDownloadProgress.active" class="p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-sm font-medium text-purple-800 dark:text-purple-200">
+                {{ visionDownloadProgress.message }}
+              </span>
+              <span class="text-sm text-purple-600 dark:text-purple-400">
+                {{ visionDownloadProgress.percent }}%
+              </span>
+            </div>
+            <div class="w-full bg-purple-200 dark:bg-purple-800 rounded-full h-2">
+              <div
+                class="bg-purple-600 h-2 rounded-full transition-all"
+                :style="{ width: visionDownloadProgress.percent + '%' }"
+              ></div>
+            </div>
+          </div>
+
+          <!-- Info Box -->
+          <div class="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+            <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">💡 Was kann das Vision-Modell?</h4>
+            <ul class="space-y-1 text-xs text-gray-600 dark:text-gray-400">
+              <li>📄 Dokumente analysieren (Rechnungen, Briefe, Verträge)</li>
+              <li>✉️ Absender und Betreff aus Briefen extrahieren</li>
+              <li>🏷️ Dokumente automatisch kategorisieren</li>
+              <li>📷 Bilder beschreiben und verstehen</li>
+            </ul>
           </div>
         </div>
 
@@ -1110,6 +1162,18 @@ const voiceAssistantStatus = ref({
 })
 const customWakeWord = ref('')
 
+// Vision Model Status & Download
+const visionModelStatus = ref({
+  installed: false,
+  modelName: '',
+  modelPath: ''
+})
+const visionDownloadProgress = ref({
+  active: false,
+  message: '',
+  percent: 0
+})
+
 // PostgreSQL Status (von der Komponente)
 const postgresConnected = ref(false)
 
@@ -1198,6 +1262,7 @@ onMounted(async () => {
   await loadSystemPrompts()
   await loadTrustedMatesCount()
   await loadVoiceAssistantSettings()  // Voice Assistant Settings laden
+  await loadVisionModelStatus()  // Vision Model Status laden
 })
 
 async function loadSettings() {
@@ -1349,6 +1414,71 @@ function formatSize(bytes) {
   if (!bytes) return 'N/A'
   const gb = bytes / (1024 * 1024 * 1024)
   return `${gb.toFixed(1)} GB`
+}
+
+// Vision Model Functions
+async function loadVisionModelStatus() {
+  try {
+    const resp = await secureFetch('/api/vision/status')
+    if (resp.ok) {
+      const status = await resp.json()
+      visionModelStatus.value = {
+        installed: status.available || false,
+        modelName: status.model || '',
+        modelPath: status.modelPath || ''
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load vision status:', error)
+  }
+}
+
+async function downloadVisionModel() {
+  visionDownloadProgress.value = {
+    active: true,
+    message: 'Starte Download...',
+    percent: 0
+  }
+
+  try {
+    // SSE für Progress
+    const eventSource = new EventSource('/api/setup/download-vision?modelId=minicpm-v-2.6')
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        visionDownloadProgress.value.message = data.message || 'Downloading...'
+        visionDownloadProgress.value.percent = data.percent || 0
+
+        if (data.done) {
+          eventSource.close()
+          visionDownloadProgress.value.active = false
+          visionModelStatus.value.installed = true
+          visionModelStatus.value.modelName = 'MiniCPM-V 2.6'
+          saveStatus.value = { success: true, message: 'Vision-Modell erfolgreich installiert!' }
+          setTimeout(() => saveStatus.value = null, 3000)
+        }
+
+        if (data.error) {
+          eventSource.close()
+          visionDownloadProgress.value.active = false
+          saveStatus.value = { success: false, message: 'Download fehlgeschlagen: ' + data.error }
+        }
+      } catch (e) {
+        console.error('SSE parse error:', e)
+      }
+    }
+
+    eventSource.onerror = () => {
+      eventSource.close()
+      visionDownloadProgress.value.active = false
+      saveStatus.value = { success: false, message: 'Download-Verbindung unterbrochen' }
+    }
+  } catch (error) {
+    console.error('Vision download error:', error)
+    visionDownloadProgress.value.active = false
+    saveStatus.value = { success: false, message: 'Download fehlgeschlagen' }
+  }
 }
 
 // System Prompts Functions

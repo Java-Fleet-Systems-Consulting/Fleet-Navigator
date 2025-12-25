@@ -530,8 +530,6 @@ func (app *App) Run() {
 	mux.HandleFunc("/api/settings", app.handleSettings)
 	mux.HandleFunc("/api/settings/model-selection", app.handleSettingsModelSelection)
 	mux.HandleFunc("/api/settings/selected-expert", app.handleSettingsSelectedExpert)
-	mux.HandleFunc("/api/settings/show-welcome-tiles", app.handleSettingsShowWelcomeTiles)
-	mux.HandleFunc("/api/settings/show-top-bar", app.handleSettingsShowTopBar)
 	mux.HandleFunc("/api/settings/ui-theme", app.handleSettingsUITheme)
 	mux.HandleFunc("/api/settings/llm-provider", app.handleSettingsLLMProvider)
 	mux.HandleFunc("/api/settings/document-model", app.handleSettingsDocumentModel)
@@ -586,6 +584,7 @@ func (app *App) Run() {
 	mux.HandleFunc("/api/voice/models", app.handleVoiceModels)                // Verfügbare Modelle
 	mux.HandleFunc("/api/voice/config", app.handleVoiceConfig)                // Konfiguration
 	mux.HandleFunc("/api/voice-store/voices", app.handleVoiceStoreVoices)     // Alle Piper Voices von HuggingFace
+	mux.HandleFunc("/api/voice-assistant/settings", app.handleVoiceAssistantSettings) // Voice Assistant Einstellungen
 
 	// User & Auth Endpoints
 	mux.HandleFunc("/api/auth/login", app.handleLogin)
@@ -4848,58 +4847,6 @@ func (app *App) handleSettingsSelectedExpert(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-// handleSettingsShowWelcomeTiles - GET/POST /api/settings/show-welcome-tiles
-func (app *App) handleSettingsShowWelcomeTiles(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		show := app.settingsService.GetShowWelcomeTiles()
-		writeJSON(w, show)
-
-	case http.MethodPost:
-		var show bool
-		if err := json.NewDecoder(r.Body).Decode(&show); err != nil {
-			http.Error(w, "Invalid JSON", http.StatusBadRequest)
-			return
-		}
-
-		if err := app.settingsService.SaveShowWelcomeTiles(show); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-
-// handleSettingsShowTopBar - GET/POST /api/settings/show-top-bar
-func (app *App) handleSettingsShowTopBar(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		show := app.settingsService.GetShowTopBar()
-		writeJSON(w, show)
-
-	case http.MethodPost:
-		var show bool
-		if err := json.NewDecoder(r.Body).Decode(&show); err != nil {
-			http.Error(w, "Invalid JSON", http.StatusBadRequest)
-			return
-		}
-
-		if err := app.settingsService.SaveShowTopBar(show); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-
 // handleSettingsUITheme - GET/POST /api/settings/ui-theme
 func (app *App) handleSettingsUITheme(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -6526,18 +6473,52 @@ func (app *App) handlePostgresMigrate(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleUpdateStatus - GET /api/update/status (Stub für Frontend)
+// handleUpdateStatus - GET /api/update/status - Prüft auf Updates via GitHub
 func (app *App) handleUpdateStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
+	// Updater erstellen und Update prüfen
+	u := updater.NewUpdater()
+	updateInfo, err := u.CheckForUpdate()
+
+	if err != nil {
+		// Fehler beim Prüfen - trotzdem aktuelle Version zurückgeben
+		writeJSON(w, map[string]interface{}{
+			"updateAvailable": false,
+			"currentVersion":  updater.Version,
+			"buildTime":       updater.BuildTime,
+			"latestVersion":   updater.Version,
+			"message":         fmt.Sprintf("Update-Prüfung fehlgeschlagen: %v", err),
+			"error":           err.Error(),
+		})
+		return
+	}
+
+	if updateInfo == nil {
+		// Kein Update verfügbar
+		writeJSON(w, map[string]interface{}{
+			"updateAvailable": false,
+			"currentVersion":  updater.Version,
+			"buildTime":       updater.BuildTime,
+			"latestVersion":   updater.Version,
+			"message":         "Sie verwenden die aktuelle Version",
+		})
+		return
+	}
+
+	// Update verfügbar
 	writeJSON(w, map[string]interface{}{
-		"updateAvailable": false,
-		"currentVersion":  "2.0.0",
-		"latestVersion":   "2.0.0",
-		"message":         "Sie verwenden die aktuelle Version",
+		"updateAvailable": true,
+		"currentVersion":  updater.Version,
+		"buildTime":       updater.BuildTime,
+		"latestVersion":   updateInfo.NewVersion,
+		"releaseNotes":    updateInfo.ReleaseNotes,
+		"downloadURL":     updateInfo.DownloadURL,
+		"releaseURL":      updateInfo.ReleaseURL,
+		"message":         fmt.Sprintf("Neue Version %s verfügbar!", updateInfo.NewVersion),
 	})
 }
 
@@ -10209,6 +10190,41 @@ func (app *App) handleVoiceConfig(w http.ResponseWriter, r *http.Request) {
 			"status":       "ok",
 			"whisperModel": status.Whisper.Model,
 			"piperVoice":   status.Piper.Voice,
+		})
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// handleVoiceAssistantSettings - GET/POST /api/voice-assistant/settings
+// Verwaltet Voice Assistant Einstellungen (Wake Word, Auto-Stop, Ruhezeiten)
+func (app *App) handleVoiceAssistantSettings(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	switch r.Method {
+	case http.MethodGet:
+		// Einstellungen aus DB laden
+		settings := app.settingsService.GetVoiceAssistantSettings()
+		json.NewEncoder(w).Encode(settings)
+
+	case http.MethodPost:
+		var req settings.VoiceAssistantSettings
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		// In DB speichern
+		if err := app.settingsService.SaveVoiceAssistantSettings(req); err != nil {
+			log.Printf("Fehler beim Speichern der Voice Assistant Settings: %v", err)
+			http.Error(w, "Failed to save settings", http.StatusInternalServerError)
+			return
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"message": "Voice Assistant Einstellungen gespeichert",
 		})
 
 	default:

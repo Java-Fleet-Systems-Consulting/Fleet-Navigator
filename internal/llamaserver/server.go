@@ -240,16 +240,17 @@ func (s *Server) GetAvailableModels() ([]ModelInfo, error) {
 
 // Start startet den llama-server mit dem angegebenen Modell
 func (s *Server) Start(modelPath string) error {
-	// BinaryPath neu ermitteln falls noch nicht gesetzt (z.B. nach Setup-Download)
-	if s.config.BinaryPath == "" {
-		// Versuche Binary im ModelsDir-Parent zu finden (dataDir/bin/)
-		if s.config.ModelsDir != "" {
-			dataDir := filepath.Dir(s.config.ModelsDir) // models -> dataDir
-			binPath, libPath, err := GetOrExtractLlamaServer(dataDir)
-			if err == nil {
+	// BinaryPath IMMER neu ermitteln - dataDir/bin/ hat Vorrang vor bundled Binary!
+	// Wichtig: Nach Setup-Download könnte eine neuere Binary im dataDir/bin/ liegen
+	if s.config.ModelsDir != "" {
+		dataDir := filepath.Dir(s.config.ModelsDir) // models -> dataDir
+		binPath, libPath, err := GetOrExtractLlamaServer(dataDir)
+		if err == nil {
+			// Nur aktualisieren wenn sich der Pfad geändert hat
+			if binPath != s.config.BinaryPath {
+				log.Printf("llama-server Binary aktualisiert: %s -> %s", s.config.BinaryPath, binPath)
 				s.config.BinaryPath = binPath
 				s.config.LibraryPath = libPath
-				log.Printf("llama-server Binary gefunden: %s", binPath)
 			}
 		}
 	}

@@ -26,7 +26,7 @@ const (
 )
 
 // Version wird beim Build gesetzt: go build -ldflags "-X fleet-navigator/internal/updater.Version=1.0.0"
-var Version = "dev"
+var Version = "0.8.13+20251225.1425"
 
 // BuildTime wird beim Build gesetzt: go build -ldflags "-X fleet-navigator/internal/updater.BuildTime=2025-01-01"
 var BuildTime = "development"

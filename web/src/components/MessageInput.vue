@@ -147,6 +147,24 @@
             >
               <Cog6ToothIcon class="w-5 h-5" />
             </button>
+
+            <!-- Fleet Mates Button -->
+            <button
+              @click="openMates"
+              class="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-all"
+              :title="t('messageInput.openMates')"
+            >
+              <UserGroupIcon class="w-5 h-5" />
+            </button>
+
+            <!-- Info Button -->
+            <button
+              @click="openInfo"
+              class="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-all"
+              :title="t('messageInput.openInfo')"
+            >
+              <InformationCircleIcon class="w-5 h-5" />
+            </button>
           </div>
 
           <!-- Right Side - Expert/Model Selector & Send -->
@@ -311,7 +329,9 @@ import {
   SunIcon,
   MoonIcon,
   Square3Stack3DIcon,
-  MicrophoneIcon
+  MicrophoneIcon,
+  UserGroupIcon,
+  InformationCircleIcon
 } from '@heroicons/vue/24/outline'
 import { useChatStore } from '../stores/chatStore'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -378,6 +398,8 @@ const showAbortModal = inject('showAbortModal')
 const openSettings = inject('openSettings', () => {})
 const toggleSystemMonitor = inject('toggleSystemMonitor', () => {})
 const openModelManager = inject('openModelManager', () => {})
+const openMates = inject('openMates', () => {})
+const openInfo = inject('openInfo', () => {})
 
 // Available models (use storeToRefs 'models' directly)
 

@@ -431,10 +431,11 @@
       "themeDefaultDesc": "Design sombre avec accents violets",
       "themeLawyer": "Avocat",
       "themeLawyerDesc": "Design clair avec Navy Blue & Or",
-      "showTopBar": "Afficher la TopBar",
-      "showTopBarDesc": "Afficher la barre de navigation supérieure avec sélection de modèle et boutons",
-      "showWelcomeTiles": "Afficher les tuiles de suggestions",
-      "showWelcomeTilesDesc": "Afficher les tuiles de sélection rapide sur l'écran d'accueil"
+      "showModeSwitchMessages": "Afficher les changements de mode",
+      "showModeSwitchMessagesDesc": "Affiche les notifications lorsqu'un expert change automatiquement de perspective",
+      "fontSize": "Taille de la police",
+      "fontSizeDesc": "Réglable de 50% à 150%",
+      "sampleText": "Texte d'exemple"
     },
     "mates": {
       "title": "Appairage des Maîtres de Flotte",

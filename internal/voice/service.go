@@ -130,18 +130,23 @@ func (s *Service) SynthesizeSpeech(text string, voice string) (*SpeechResult, er
 }
 
 // EnsureModelsDownloaded stellt sicher, dass alle Modelle heruntergeladen sind
+// WICHTIG: Hält den Mutex NICHT während des Downloads um Deadlocks zu vermeiden!
 func (s *Service) EnsureModelsDownloaded(progressChan chan<- DownloadProgress) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	// Referenzen unter Lock holen
+	s.mu.RLock()
+	whisper := s.whisper
+	piper := s.piper
+	s.mu.RUnlock()
 
-	if s.whisper != nil {
-		if err := s.whisper.EnsureDownloaded(progressChan); err != nil {
+	// Downloads OHNE Lock durchführen (vermeidet Deadlock mit GetStatus)
+	if whisper != nil {
+		if err := whisper.EnsureDownloaded(progressChan); err != nil {
 			return fmt.Errorf("Whisper-Download: %w", err)
 		}
 	}
 
-	if s.piper != nil {
-		if err := s.piper.EnsureDownloaded(progressChan); err != nil {
+	if piper != nil {
+		if err := piper.EnsureDownloaded(progressChan); err != nil {
 			return fmt.Errorf("Piper-Download: %w", err)
 		}
 	}
@@ -150,12 +155,16 @@ func (s *Service) EnsureModelsDownloaded(progressChan chan<- DownloadProgress) e
 }
 
 // EnsureWhisperDownloaded stellt sicher, dass nur Whisper heruntergeladen ist
+// WICHTIG: Hält den Mutex NICHT während des Downloads um Deadlocks zu vermeiden!
 func (s *Service) EnsureWhisperDownloaded(progressChan chan<- DownloadProgress) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	// Referenz unter Lock holen
+	s.mu.RLock()
+	whisper := s.whisper
+	s.mu.RUnlock()
 
-	if s.whisper != nil {
-		if err := s.whisper.EnsureDownloaded(progressChan); err != nil {
+	// Download OHNE Lock durchführen
+	if whisper != nil {
+		if err := whisper.EnsureDownloaded(progressChan); err != nil {
 			return fmt.Errorf("Whisper-Download: %w", err)
 		}
 	}
@@ -164,12 +173,16 @@ func (s *Service) EnsureWhisperDownloaded(progressChan chan<- DownloadProgress) 
 }
 
 // EnsurePiperDownloaded stellt sicher, dass nur Piper heruntergeladen ist
+// WICHTIG: Hält den Mutex NICHT während des Downloads um Deadlocks zu vermeiden!
 func (s *Service) EnsurePiperDownloaded(progressChan chan<- DownloadProgress) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	// Referenz unter Lock holen
+	s.mu.RLock()
+	piper := s.piper
+	s.mu.RUnlock()
 
-	if s.piper != nil {
-		if err := s.piper.EnsureDownloaded(progressChan); err != nil {
+	// Download OHNE Lock durchführen
+	if piper != nil {
+		if err := piper.EnsureDownloaded(progressChan); err != nil {
 			return fmt.Errorf("Piper-Download: %w", err)
 		}
 	}
@@ -258,20 +271,25 @@ func (s *Service) SetPiperVoice(voiceID string) error {
 }
 
 // DownloadWhisperModel lädt ein spezifisches Whisper-Modell herunter
+// WICHTIG: Hält den Mutex NICHT während des Downloads um Deadlocks zu vermeiden!
 func (s *Service) DownloadWhisperModel(modelID string, progressChan chan<- DownloadProgress) error {
+	// Referenz holen und Modell setzen unter kurzem Lock
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if s.whisper == nil {
+		s.mu.Unlock()
 		return fmt.Errorf("Whisper nicht initialisiert")
 	}
+	whisper := s.whisper
+	oldModel := whisper.model
+	whisper.SetModel(modelID)
+	s.mu.Unlock()
 
-	// Modell temporär setzen um es herunterzuladen
-	oldModel := s.whisper.model
-	s.whisper.SetModel(modelID)
-
-	if err := s.whisper.downloadModel(progressChan); err != nil {
-		s.whisper.SetModel(oldModel)
+	// Download OHNE Lock durchführen
+	if err := whisper.downloadModel(progressChan); err != nil {
+		// Bei Fehler altes Modell wiederherstellen
+		s.mu.Lock()
+		whisper.SetModel(oldModel)
+		s.mu.Unlock()
 		return err
 	}
 
@@ -280,16 +298,19 @@ func (s *Service) DownloadWhisperModel(modelID string, progressChan chan<- Downl
 
 // DownloadPiperVoice lädt eine spezifische Piper-Stimme herunter
 // Unterstützt sowohl vordefinierte als auch beliebige Piper Voice IDs von HuggingFace
+// WICHTIG: Hält den Mutex NICHT während des Downloads um Deadlocks zu vermeiden!
 func (s *Service) DownloadPiperVoice(voiceID string, progressChan chan<- DownloadProgress) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	// Referenz unter kurzem Lock holen
+	s.mu.RLock()
+	piper := s.piper
+	s.mu.RUnlock()
 
-	if s.piper == nil {
+	if piper == nil {
 		return fmt.Errorf("Piper nicht initialisiert")
 	}
 
-	// Verwendet die neue Methode die beliebige Voice IDs unterstützt
-	return s.piper.DownloadVoiceByIDWithProgress(voiceID, progressChan)
+	// Download OHNE Lock durchführen
+	return piper.DownloadVoiceByIDWithProgress(voiceID, progressChan)
 }
 
 // GetInstalledWhisperModels gibt installierte Whisper-Modelle zurück

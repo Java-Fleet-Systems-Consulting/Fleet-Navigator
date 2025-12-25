@@ -90,21 +90,55 @@ func (s *Service) SaveVoiceAssistantQuietHoursEnd(time string) error {
 type VoiceAssistantSettings struct {
 	Enabled           bool   `json:"enabled"`           // Lauschfunktion aktiv
 	WakeWord          string `json:"wakeWord"`          // Wake Word (hey_ewa, ewa, custom)
+	CustomWakeWord    string `json:"customWakeWord"`    // Benutzerdefiniertes Wake Word
 	AutoStop          bool   `json:"autoStop"`          // Nach Antwort stoppen
 	QuietHoursEnabled bool   `json:"quietHoursEnabled"` // Ruhezeiten aktiv
 	QuietHoursStart   string `json:"quietHoursStart"`   // Ruhezeit Start
 	QuietHoursEnd     string `json:"quietHoursEnd"`     // Ruhezeit Ende
+	TTSEnabled        bool   `json:"ttsEnabled"`        // Text-to-Speech aktiviert
 }
+
+// --- Custom Wake Word ---
+
+const KeyVoiceAssistantCustomWakeWord = "voice_assistant_custom_wake_word"
+
+// GetVoiceAssistantCustomWakeWord gibt das benutzerdefinierte Wake Word zurück
+func (s *Service) GetVoiceAssistantCustomWakeWord() string {
+	return s.GetString(KeyVoiceAssistantCustomWakeWord, "")
+}
+
+// SaveVoiceAssistantCustomWakeWord speichert das benutzerdefinierte Wake Word
+func (s *Service) SaveVoiceAssistantCustomWakeWord(wakeWord string) error {
+	return s.SetString(KeyVoiceAssistantCustomWakeWord, wakeWord)
+}
+
+// --- TTS Enabled ---
+
+const KeyVoiceAssistantTTSEnabled = "voice_assistant_tts_enabled"
+
+// GetVoiceAssistantTTSEnabled gibt zurück ob TTS aktiviert ist
+func (s *Service) GetVoiceAssistantTTSEnabled() bool {
+	return s.GetBool(KeyVoiceAssistantTTSEnabled, true)
+}
+
+// SaveVoiceAssistantTTSEnabled speichert die TTS-Einstellung
+func (s *Service) SaveVoiceAssistantTTSEnabled(enabled bool) error {
+	return s.SetBool(KeyVoiceAssistantTTSEnabled, enabled)
+}
+
+// --- Komplette Settings ---
 
 // GetVoiceAssistantSettings gibt alle Voice Assistant Settings zurück
 func (s *Service) GetVoiceAssistantSettings() VoiceAssistantSettings {
 	return VoiceAssistantSettings{
 		Enabled:           s.GetVoiceAssistantEnabled(),
 		WakeWord:          s.GetVoiceAssistantWakeWord(),
+		CustomWakeWord:    s.GetVoiceAssistantCustomWakeWord(),
 		AutoStop:          s.GetVoiceAssistantAutoStop(),
 		QuietHoursEnabled: s.GetVoiceAssistantQuietHoursEnabled(),
 		QuietHoursStart:   s.GetVoiceAssistantQuietHoursStart(),
 		QuietHoursEnd:     s.GetVoiceAssistantQuietHoursEnd(),
+		TTSEnabled:        s.GetVoiceAssistantTTSEnabled(),
 	}
 }
 
@@ -114,6 +148,9 @@ func (s *Service) SaveVoiceAssistantSettings(settings VoiceAssistantSettings) er
 		return err
 	}
 	if err := s.SaveVoiceAssistantWakeWord(settings.WakeWord); err != nil {
+		return err
+	}
+	if err := s.SaveVoiceAssistantCustomWakeWord(settings.CustomWakeWord); err != nil {
 		return err
 	}
 	if err := s.SaveVoiceAssistantAutoStop(settings.AutoStop); err != nil {
@@ -126,6 +163,9 @@ func (s *Service) SaveVoiceAssistantSettings(settings VoiceAssistantSettings) er
 		return err
 	}
 	if err := s.SaveVoiceAssistantQuietHoursEnd(settings.QuietHoursEnd); err != nil {
+		return err
+	}
+	if err := s.SaveVoiceAssistantTTSEnabled(settings.TTSEnabled); err != nil {
 		return err
 	}
 	return nil

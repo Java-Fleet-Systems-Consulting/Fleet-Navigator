@@ -93,8 +93,6 @@ type UserPreferences struct {
 type UISettings struct {
 	Theme              string `json:"theme"`              // Theme (tech-dark, etc.)
 	DarkMode           bool   `json:"darkMode"`           // Dark Mode
-	ShowWelcomeTiles   bool   `json:"showWelcomeTiles"`   // Willkommens-Kacheln
-	ShowTopBar         bool   `json:"showTopBar"`         // TopBar (Debug)
 	FontSize           int    `json:"fontSize"`           // Schriftgröße (50-150)
 	WebSearchAnimation string `json:"webSearchAnimation"` // Web-Suche Animation (data-wave, orbit, radar, constellation)
 }
@@ -104,8 +102,6 @@ func DefaultUISettings() UISettings {
 	return UISettings{
 		Theme:              "tech-dark",
 		DarkMode:           true,
-		ShowWelcomeTiles:   true,
-		ShowTopBar:         false,
 		FontSize:           100,
 		WebSearchAnimation: "data-wave",
 	}

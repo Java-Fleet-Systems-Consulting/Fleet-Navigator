@@ -296,9 +296,16 @@
               {{ llamaServerOnline ? $t('sidebar.online') : $t('sidebar.offline') }}
             </span>
           </div>
-          <!-- User + Logout -->
+          <!-- User + Help + Logout -->
           <div class="flex items-center justify-end gap-1">
             <span class="text-gray-400 truncate text-[10px]">{{ authStore.user?.username || '?' }}</span>
+            <button
+              @click="openHelp"
+              class="p-1 text-gray-500 hover:text-blue-400 hover:bg-blue-500/10 rounded transition-all flex-shrink-0"
+              :title="$t('sidebar.help') || 'Hilfe'"
+            >
+              <QuestionMarkCircleIcon class="w-3.5 h-3.5" />
+            </button>
             <button
               @click="handleLogout"
               class="p-1 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-all flex-shrink-0"
@@ -646,7 +653,8 @@ import {
   ArrowUpTrayIcon,
   XMarkIcon,
   ServerStackIcon,
-  PowerIcon
+  PowerIcon,
+  QuestionMarkCircleIcon
 } from '@heroicons/vue/24/outline'
 import { useAuthStore } from '../stores/authStore'
 import api from '../services/api'
@@ -1168,6 +1176,11 @@ async function deleteContextFile(fileId) {
 }
 
 // Logout-Funktion
+// Open Help in new tab
+function openHelp() {
+  window.open('/help', '_blank')
+}
+
 async function handleLogout() {
   const confirmed = await confirm({
     title: t('sidebar.logout'),

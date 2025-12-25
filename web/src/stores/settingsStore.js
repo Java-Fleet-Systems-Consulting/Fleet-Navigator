@@ -29,8 +29,6 @@ const defaultSettings = {
   uiTheme: 'default',  // UI Theme: 'default' (dark/tech) or 'lawyer' (light/professional)
   fontSize: 100,  // Font size: 50-150 (percentage, 100 = normal)
   sidebarCollapsed: false,  // Sidebar collapsed state
-  showWelcomeTiles: false,  // Show suggestion tiles - loaded from DB (default: false until DB confirms)
-  showTopBar: false,  // TopBar ein-/ausblenden (Default: aus für professionelle Ansicht)
   showModeSwitchMessages: true,  // Modus-Wechsel-Nachrichten anzeigen (z.B. "Roland wechselt zu Verkehrsrecht")
   webSearchAnimation: 'data-wave',  // Web-Suche Animation: data-wave, orbit, radar, constellation
 
@@ -64,11 +62,9 @@ export const useSettingsStore = defineStore('settings', () => {
       console.log('📥 Loading settings from localStorage...')
       if (stored) {
         const storedSettings = JSON.parse(stored)
-        console.log('📥 localStorage showTopBar:', storedSettings.showTopBar)
         // Merge: defaults first, then stored values (but ensure all new defaults are present)
         // This ensures new settings get their defaults even if not in localStorage
         const merged = { ...defaultSettings, ...storedSettings }
-        console.log('📥 merged showTopBar:', merged.showTopBar)
 
         // Load chaining settings from separate localStorage key and override merged settings
         try {
@@ -146,55 +142,6 @@ export const useSettingsStore = defineStore('settings', () => {
     settings.value.sidebarCollapsed = !settings.value.sidebarCollapsed
   }
 
-  // Load showWelcomeTiles from backend database (Source of Truth)
-  // This MUST override localStorage value as DB is the source of truth
-  async function loadShowWelcomeTilesFromBackend() {
-    try {
-      const response = await fetch('/api/settings/show-welcome-tiles')
-      if (response.ok) {
-        const value = await response.json()
-        settings.value.showWelcomeTiles = value
-        // Force localStorage update to match DB
-        const stored = localStorage.getItem(STORAGE_KEY)
-        if (stored) {
-          const storedSettings = JSON.parse(stored)
-          storedSettings.showWelcomeTiles = value
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(storedSettings))
-        }
-        console.log('🔄 showWelcomeTiles loaded from backend:', value)
-      }
-    } catch (e) {
-      console.warn('⚠️ Could not load showWelcomeTiles from backend:', e.message)
-    }
-  }
-
-  // Load showTopBar from backend database (Source of Truth)
-  async function loadShowTopBarFromBackend() {
-    try {
-      console.log('🔄 Loading showTopBar from backend...')
-      console.log('🔄 Current value BEFORE:', settings.value.showTopBar)
-      const response = await fetch('/api/settings/show-top-bar')
-      if (response.ok) {
-        const value = await response.json()
-        console.log('🔄 Backend returned:', value, typeof value)
-        settings.value.showTopBar = value
-        console.log('🔄 Current value AFTER:', settings.value.showTopBar)
-        // Force localStorage update to match DB
-        const stored = localStorage.getItem(STORAGE_KEY)
-        if (stored) {
-          const storedSettings = JSON.parse(stored)
-          storedSettings.showTopBar = value
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(storedSettings))
-        }
-        console.log('✅ showTopBar loaded from backend:', value)
-      } else {
-        console.warn('⚠️ showTopBar backend returned non-OK:', response.status)
-      }
-    } catch (e) {
-      console.warn('⚠️ Could not load showTopBar from backend:', e.message)
-    }
-  }
-
   // Load uiTheme from backend database (Source of Truth)
   async function loadUiThemeFromBackend() {
     try {
@@ -229,20 +176,6 @@ export const useSettingsStore = defineStore('settings', () => {
       console.log('✅ uiTheme saved to backend:', theme)
     } catch (e) {
       console.warn('⚠️ Could not save uiTheme to backend:', e.message)
-    }
-  }
-
-  // Save showTopBar to backend database
-  async function saveShowTopBarToBackend(show) {
-    try {
-      await fetch('/api/settings/show-top-bar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(show)
-      })
-      console.log('✅ showTopBar saved to backend:', show)
-    } catch (e) {
-      console.warn('⚠️ Could not save showTopBar to backend:', e.message)
     }
   }
 
@@ -395,8 +328,6 @@ export const useSettingsStore = defineStore('settings', () => {
   async function initFromBackend() {
     console.log('🔄 Initialisiere Settings vom Backend...')
     await Promise.all([
-      loadShowWelcomeTilesFromBackend(),
-      loadShowTopBarFromBackend(),
       loadUiThemeFromBackend(),
       loadSamplingParamsFromBackend(),
       loadChainingSettingsFromBackend(),
@@ -419,9 +350,6 @@ export const useSettingsStore = defineStore('settings', () => {
     isVisionModel,
     toggleSidebar,
     syncVisionSettingsWithBackend,
-    loadShowWelcomeTilesFromBackend,
-    loadShowTopBarFromBackend,
-    saveShowTopBarToBackend,
     loadUiThemeFromBackend,
     saveUiThemeToBackend,
     // Neue persistente Settings (DB = Source of Truth)

@@ -51,6 +51,9 @@
       <SettingsModal v-if="showSettings" :is-open="showSettings" :initial-tab="settingsInitialTab" @close="showSettings = false; settingsInitialTab = null" />
     </Transition>
 
+    <!-- Info Dialog -->
+    <InfoDialog :show="showInfoDialog" @close="showInfoDialog = false" />
+
     <!-- Abort Confirmation Modal -->
     <Transition name="fade">
       <div v-if="showAbortModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -86,6 +89,7 @@
 
 <script setup>
 import { ref, provide, onMounted, watch, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import Sidebar from '../Sidebar.vue'
 import TopBar from '../TopBar.vue'
 import SystemMonitor from '../SystemMonitor.vue'
@@ -94,6 +98,7 @@ import SettingsModal from '../SettingsModal.vue'
 import SetupWizardModal from '../SetupWizardModal.vue'
 import ToastContainer from '../ToastContainer.vue'
 import AiStartupOverlay from '../AiStartupOverlay.vue'
+import InfoDialog from '../InfoDialog.vue'
 import { useChatStore } from '../../stores/chatStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import api from '../../services/api'
@@ -101,11 +106,13 @@ import axios from 'axios'
 
 const chatStore = useChatStore()
 const settingsStore = useSettingsStore()
+const router = useRouter()
 const showMonitor = ref(false)
 const showModelManager = ref(false)
 const showSettings = ref(false)
 const showAbortModal = ref(false)
 const showSetupWizard = ref(false)
+const showInfoDialog = ref(false)
 const selectedProject = ref(null)
 const settingsInitialTab = ref(null)
 
@@ -278,6 +285,12 @@ provide('projectChats', projectChats)
 provide('openSettings', () => { showSettings.value = true })
 provide('toggleSystemMonitor', () => { showMonitor.value = !showMonitor.value })
 provide('openModelManager', () => { showModelManager.value = true })
+provide('openMates', () => {
+  // Fleet Mates in neuem Tab öffnen
+  const route = router.resolve({ name: 'fleet-mates' })
+  window.open(route.href, '_blank')
+})
+provide('openInfo', () => { showInfoDialog.value = true })
 </script>
 
 <style>

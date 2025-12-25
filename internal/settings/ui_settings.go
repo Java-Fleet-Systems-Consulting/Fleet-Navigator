@@ -31,31 +31,6 @@ func (s *Service) SaveDarkMode(darkMode bool) error {
 	return s.SetBool(KeyDarkMode, darkMode)
 }
 
-// --- Welcome Tiles ---
-
-// GetShowWelcomeTiles gibt zurück ob Welcome-Tiles angezeigt werden sollen
-func (s *Service) GetShowWelcomeTiles() bool {
-	return s.GetBool(KeyShowWelcomeTiles, true)
-}
-
-// SaveShowWelcomeTiles speichert die Welcome-Tiles-Einstellung
-func (s *Service) SaveShowWelcomeTiles(show bool) error {
-	return s.SetBool(KeyShowWelcomeTiles, show)
-}
-
-// --- TopBar ---
-
-// GetShowTopBar gibt zurück ob die TopBar angezeigt werden soll
-// Default: false (für professionelle Ansicht - nur bei Debugging aktivieren)
-func (s *Service) GetShowTopBar() bool {
-	return s.GetBool(KeyShowTopBar, false)
-}
-
-// SaveShowTopBar speichert die TopBar-Einstellung
-func (s *Service) SaveShowTopBar(show bool) error {
-	return s.SetBool(KeyShowTopBar, show)
-}
-
 // --- Font Size ---
 
 // GetFontSize gibt die Schriftgröße zurück (50-150%)
@@ -118,8 +93,6 @@ func (s *Service) GetUISettings() UISettings {
 	return UISettings{
 		Theme:              s.GetUITheme(),
 		DarkMode:           s.GetDarkMode(),
-		ShowWelcomeTiles:   s.GetShowWelcomeTiles(),
-		ShowTopBar:         s.GetShowTopBar(),
 		FontSize:           s.GetFontSize(),
 		WebSearchAnimation: s.GetWebSearchAnimation(),
 	}
@@ -131,12 +104,6 @@ func (s *Service) SaveUISettings(settings UISettings) error {
 		return err
 	}
 	if err := s.SaveDarkMode(settings.DarkMode); err != nil {
-		return err
-	}
-	if err := s.SaveShowWelcomeTiles(settings.ShowWelcomeTiles); err != nil {
-		return err
-	}
-	if err := s.SaveShowTopBar(settings.ShowTopBar); err != nil {
 		return err
 	}
 	if err := s.SaveFontSize(settings.FontSize); err != nil {

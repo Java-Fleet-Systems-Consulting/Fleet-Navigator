@@ -218,6 +218,16 @@ export default {
     return response.data
   },
 
+  async getSystemVersion() {
+    const response = await api.get('/system/version')
+    return response.data
+  },
+
+  async checkForUpdate() {
+    const response = await api.get('/update/status')
+    return response.data
+  },
+
   // Abort request
   async abortRequest(requestId) {
     const response = await api.post(`/chat/abort/${requestId}`)

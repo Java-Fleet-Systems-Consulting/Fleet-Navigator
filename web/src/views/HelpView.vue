@@ -124,7 +124,7 @@
 
           <div class="info-callout success">
             <span class="callout-icon">✅</span>
-            <p>Fleet Navigator verwendet ausschließlich <strong>Instruct-Modelle</strong> wie Llama 3.2 Instruct, die speziell für Konversationen optimiert sind.</p>
+            <p>Fleet Navigator verwendet ausschließlich <strong>Instruct-Modelle</strong> wie Llama 3.2 Instruct, die speziell für Konversationen optimiert sind. <strong>Tipp:</strong> Für den IT-Experten Luca Santoro empfehlen wir später ein <em>Coder-Modell</em> (z.B. Qwen2.5-Coder), da diese für Programmieraufgaben optimiert sind.</p>
           </div>
 
           <h2>Warum "Instruct" besser ist für Assistenten</h2>
@@ -287,6 +287,77 @@
               <p>Lange Texte in Kurzform bringen</p>
             </div>
           </div>
+
+          <h2>⚠️ "Lost in the Middle" - Das Loch in der Mitte</h2>
+          <div class="info-callout" style="border-left-color: #f59e0b; background: #422006;">
+            <span class="callout-icon">🕳️</span>
+            <div>
+              <p><strong>Wichtig bei kleineren Modellen (7B, 8B, 9B):</strong></p>
+              <p>Studien zeigen, dass LLMs Informationen am <em>Anfang</em> und <em>Ende</em> des Kontexts besser verarbeiten als in der <strong>Mitte</strong>. Dieses Phänomen heißt "Lost in the Middle".</p>
+            </div>
+          </div>
+
+          <div class="middle-diagram">
+            <div class="attention-bar">
+              <div class="attention-zone high">
+                <span class="zone-label">Anfang</span>
+                <span class="zone-attention">🟢 Hohe Aufmerksamkeit</span>
+              </div>
+              <div class="attention-zone low">
+                <span class="zone-label">Mitte</span>
+                <span class="zone-attention">🔴 Niedrige Aufmerksamkeit</span>
+              </div>
+              <div class="attention-zone high">
+                <span class="zone-label">Ende</span>
+                <span class="zone-attention">🟢 Hohe Aufmerksamkeit</span>
+              </div>
+            </div>
+          </div>
+
+          <h3>Was bedeutet das für die Praxis?</h3>
+          <div class="comparison-box">
+            <div class="compare-item cloud">
+              <h4>❌ Nicht empfohlen</h4>
+              <ul>
+                <li>Bei 7B-9B Modellen: Volle 128K Context nutzen</li>
+                <li>Wichtige Infos in der Mitte platzieren</li>
+                <li>Sehr lange Dokumente ohne Struktur</li>
+              </ul>
+            </div>
+            <div class="compare-item local">
+              <h4>✅ Besser</h4>
+              <ul>
+                <li>Bei 7B-9B: Maximal <strong>16K-32K</strong> nutzen</li>
+                <li>Wichtiges an den <strong>Anfang oder Ende</strong></li>
+                <li>Dokumente in Abschnitte aufteilen</li>
+                <li>Für lange Dokumente: <strong>14B+ Modelle</strong></li>
+              </ul>
+            </div>
+          </div>
+
+          <h3>Empfehlung nach Modellgröße</h3>
+          <div class="context-recommendation">
+            <div class="rec-card">
+              <span class="rec-size">1B - 3B</span>
+              <span class="rec-context">4K - 8K Context</span>
+              <span class="rec-desc">Kurze Gespräche, einfache Aufgaben</span>
+            </div>
+            <div class="rec-card">
+              <span class="rec-size">7B - 9B</span>
+              <span class="rec-context">16K - 32K Context</span>
+              <span class="rec-desc">Mittellange Dokumente, zuverlässig</span>
+            </div>
+            <div class="rec-card recommended">
+              <span class="rec-size">14B+</span>
+              <span class="rec-context">64K - 128K Context</span>
+              <span class="rec-desc">Lange Dokumente, volle Nutzung</span>
+            </div>
+          </div>
+
+          <div class="info-callout success">
+            <span class="callout-icon">💡</span>
+            <p><strong>Tipp:</strong> Wenn du ein 8B Modell verwendest und wichtige Informationen nicht erkannt werden, versuche den Text zu kürzen oder die wichtigen Stellen an den Anfang zu verschieben.</p>
+          </div>
         </div>
 
         <!-- Local vs Cloud -->
@@ -294,7 +365,79 @@
           <h1>💻 Lokal vs. ☁️ Cloud (ChatGPT)</h1>
 
           <div class="intro-box">
-            <p>Fleet Navigator läuft <strong>komplett lokal</strong> auf deinem Computer - ganz anders als ChatGPT, das in der Cloud läuft.</p>
+            <p>Fleet Navigator läuft <strong>komplett lokal</strong> auf deinem Computer - ganz anders als ChatGPT, das in der Cloud läuft. Das ist nicht nur praktisch, sondern auch <strong>rechtlich relevant</strong>.</p>
+          </div>
+
+          <h2>🏛️ Digitale Souveränität</h2>
+          <div class="info-callout">
+            <span class="callout-icon">🔐</span>
+            <div>
+              <p><strong>Digitale Souveränität</strong> bedeutet die volle Kontrolle über eigene Daten und digitale Infrastruktur zu behalten.</p>
+              <ul>
+                <li><strong>Keine Abhängigkeit</strong> von US-Konzernen (OpenAI, Google, Microsoft)</li>
+                <li><strong>Keine Datenübertragung</strong> in Drittländer</li>
+                <li><strong>Kein Vendor Lock-in</strong> - du bestimmst die Regeln</li>
+                <li><strong>Offline-fähig</strong> - funktioniert auch ohne Internet</li>
+              </ul>
+            </div>
+          </div>
+
+          <h2>⚖️ Rechtlicher Rahmen: DSGVO & BDSG</h2>
+          <div class="legal-box">
+            <div class="legal-item">
+              <h4>🇪🇺 DSGVO (Datenschutz-Grundverordnung)</h4>
+              <p>Die EU-weite Verordnung regelt den Schutz personenbezogener Daten:</p>
+              <ul>
+                <li><strong>Art. 44-49:</strong> Übermittlung in Drittländer nur mit Garantien</li>
+                <li><strong>Art. 28:</strong> Auftragsverarbeiter brauchen Vertrag (AV-Vertrag)</li>
+                <li><strong>Art. 32:</strong> Technische Schutzmaßnahmen erforderlich</li>
+              </ul>
+            </div>
+            <div class="legal-item">
+              <h4>🇩🇪 BDSG (Bundesdatenschutzgesetz)</h4>
+              <p>Das deutsche Gesetz ergänzt die DSGVO:</p>
+              <ul>
+                <li><strong>§ 22:</strong> Besondere Kategorien (Gesundheit, Religion)</li>
+                <li><strong>§ 26:</strong> Beschäftigtendatenschutz</li>
+                <li><strong>§ 42-43:</strong> Strafvorschriften</li>
+              </ul>
+            </div>
+          </div>
+
+          <h2>⚠️ Strafen bei Verstößen</h2>
+          <div class="penalty-box">
+            <div class="penalty-card severe">
+              <span class="penalty-icon">💸</span>
+              <h4>Schwere Verstöße (DSGVO Art. 83 Abs. 5)</h4>
+              <p class="penalty-amount">Bis zu 20 Mio. EUR oder 4% des Jahresumsatzes</p>
+              <ul>
+                <li>Unzulässige Datenübermittlung in Drittländer</li>
+                <li>Verarbeitung ohne Rechtsgrundlage</li>
+                <li>Verletzung der Betroffenenrechte</li>
+              </ul>
+            </div>
+            <div class="penalty-card moderate">
+              <span class="penalty-icon">💰</span>
+              <h4>Sonstige Verstöße (DSGVO Art. 83 Abs. 4)</h4>
+              <p class="penalty-amount">Bis zu 10 Mio. EUR oder 2% des Jahresumsatzes</p>
+              <ul>
+                <li>Fehlende technische Maßnahmen</li>
+                <li>Kein AV-Vertrag mit Dienstleistern</li>
+                <li>Unzureichende Dokumentation</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="info-callout success">
+            <span class="callout-icon">🛡️</span>
+            <div>
+              <p><strong>Beispiele aus der Praxis:</strong></p>
+              <ul>
+                <li><strong>H&M (2020):</strong> 35,3 Mio. EUR - unzulässige Mitarbeiterüberwachung</li>
+                <li><strong>British Airways:</strong> 22 Mio. EUR - Datenleck</li>
+                <li><strong>1&1 (2019):</strong> 9,5 Mio. EUR - unzureichende Authentifizierung</li>
+              </ul>
+            </div>
           </div>
 
           <h2>Der große Unterschied</h2>
@@ -314,9 +457,10 @@
               </div>
               <ul>
                 <li>❌ Daten verlassen deinen PC</li>
-                <li>❌ Abhängig von Internet</li>
+                <li>❌ Datenübermittlung in USA (Drittland!)</li>
+                <li>❌ AV-Vertrag & Rechtsgrundlage nötig</li>
                 <li>❌ Monatliche Kosten ($20+)</li>
-                <li>❌ Anbieter kann Nutzung einschränken</li>
+                <li>❌ Anbieter kann Daten für Training nutzen</li>
                 <li>✅ Sehr leistungsfähig</li>
               </ul>
             </div>
@@ -331,9 +475,10 @@
               </div>
               <ul>
                 <li>✅ Daten bleiben auf deinem PC</li>
-                <li>✅ Funktioniert offline</li>
+                <li>✅ Keine Drittlandübermittlung</li>
+                <li>✅ Kein AV-Vertrag nötig</li>
                 <li>✅ Einmalige Einrichtung, keine Kosten</li>
-                <li>✅ Volle Kontrolle</li>
+                <li>✅ Volle Kontrolle & Souveränität</li>
                 <li>⚡ Gut für die meisten Aufgaben</li>
               </ul>
             </div>
@@ -344,22 +489,29 @@
             <div class="use-case local">
               <h4>💻 Fleet Navigator ideal für:</h4>
               <ul>
+                <li>Personenbezogene Daten (DSGVO-relevant)</li>
                 <li>Vertrauliche Dokumente (Verträge, Finanzen)</li>
-                <li>Firmen-interne Daten</li>
+                <li>Firmen-interne & Mitarbeiterdaten</li>
+                <li>Gesundheits- und Sozialdaten</li>
+                <li>Behörden und öffentliche Stellen</li>
                 <li>Offline-Arbeit (Zug, Flugzeug)</li>
-                <li>Datenschutz-kritische Bereiche</li>
-                <li>Wiederkehrende Aufgaben (unbegrenzt)</li>
               </ul>
             </div>
             <div class="use-case cloud">
-              <h4>☁️ Cloud-KI besser für:</h4>
+              <h4>☁️ Cloud-KI (mit Vorsicht) für:</h4>
               <ul>
+                <li>Öffentliche, nicht-personenbezogene Daten</li>
                 <li>Maximale Leistung bei komplexen Aufgaben</li>
                 <li>Aktuelle Informationen (Internet-Suche)</li>
                 <li>Schwache Hardware ohne GPU</li>
-                <li>Gelegentliche Nutzung</li>
+                <li>⚠️ Niemals sensible Daten hochladen!</li>
               </ul>
             </div>
+          </div>
+
+          <div class="info-callout">
+            <span class="callout-icon">💡</span>
+            <p><strong>Fazit:</strong> Mit Fleet Navigator sind Sie auf der sicheren Seite - keine Datenübermittlung, keine Drittlandproblematik, volle Kontrolle. Das ist nicht nur datenschutzkonform, sondern auch <em>digitale Souveränität</em> in der Praxis.</p>
           </div>
         </div>
 
@@ -663,18 +815,18 @@ const route = useRoute()
 const router = useRouter()
 
 const topics = [
-  { id: 'vision', name: 'Vision-Modelle', icon: '👁️' },
+  { id: 'local', name: 'Lokal vs. Cloud', icon: '💻' },
   { id: 'instruct', name: 'Instruct-Modelle', icon: '🎯' },
   { id: 'parameters', name: 'Was bedeutet 8B?', icon: '🔢' },
-  { id: 'context', name: 'Context-Größe', icon: '📚' },
-  { id: 'local', name: 'Lokal vs. Cloud', icon: '💻' },
   { id: 'experts', name: 'Fokussierte Experten', icon: '👨‍💼' },
-  { id: 'voice', name: 'Voice (Whisper/Piper)', icon: '🎤' },
+  { id: 'vision', name: 'Vision-Modelle', icon: '👁️' },
   { id: 'chaining', name: 'Vision Chaining', icon: '🔗' },
-  { id: 'rag', name: 'RAG & Websuche', icon: '🔍' }
+  { id: 'rag', name: 'RAG & Websuche', icon: '🔍' },
+  { id: 'context', name: 'Context-Größe', icon: '📚' },
+  { id: 'voice', name: 'Voice (Whisper/Piper)', icon: '🎤' }
 ]
 
-const currentTopic = ref('vision')
+const currentTopic = ref('local')
 
 onMounted(() => {
   // Check for topic in query params
@@ -1163,6 +1315,95 @@ function closeHelp() {
   color: #c4b5fd;
 }
 
+/* Lost in the Middle Diagram */
+.middle-diagram {
+  margin: 20px 0;
+}
+
+.attention-bar {
+  display: flex;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #2d2d44;
+}
+
+.attention-zone {
+  flex: 1;
+  padding: 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.attention-zone.high {
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.2) 0%, #2d2d44 100%);
+}
+
+.attention-zone.low {
+  background: linear-gradient(180deg, rgba(220, 38, 38, 0.3) 0%, #2d2d44 100%);
+  border-left: 1px solid #3d3d5c;
+  border-right: 1px solid #3d3d5c;
+}
+
+.zone-label {
+  font-weight: 600;
+  color: #fff;
+  font-size: 16px;
+}
+
+.zone-attention {
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+/* Context Recommendation Cards */
+.context-recommendation {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.rec-card {
+  background: #2d2d44;
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  border-top: 4px solid #666;
+}
+
+.rec-card.recommended {
+  border-top-color: #10b981;
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.1) 0%, #2d2d44 100%);
+}
+
+.rec-size {
+  display: block;
+  font-size: 24px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 8px;
+}
+
+.rec-context {
+  display: block;
+  font-size: 16px;
+  color: #4f46e5;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.rec-card.recommended .rec-context {
+  color: #10b981;
+}
+
+.rec-desc {
+  display: block;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
 /* Expert Grid */
 .expert-grid {
   display: grid;
@@ -1357,6 +1598,108 @@ function closeHelp() {
   margin-bottom: 6px;
 }
 
+/* Legal Box */
+.legal-box {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+  margin: 20px 0;
+}
+
+.legal-item {
+  background: #2d2d44;
+  border-radius: 12px;
+  padding: 20px;
+  border-left: 4px solid #3b82f6;
+}
+
+.legal-item h4 {
+  color: #fff;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+.legal-item > p {
+  color: #94a3b8;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.legal-item ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.legal-item li {
+  color: #94a3b8;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+/* Penalty Box */
+.penalty-box {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+  margin: 20px 0;
+}
+
+.penalty-card {
+  background: #2d2d44;
+  border-radius: 12px;
+  padding: 20px;
+  border-top: 4px solid #666;
+  text-align: center;
+}
+
+.penalty-card.severe {
+  border-top-color: #dc2626;
+  background: linear-gradient(180deg, rgba(220, 38, 38, 0.1) 0%, #2d2d44 100%);
+}
+
+.penalty-card.moderate {
+  border-top-color: #f59e0b;
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.1) 0%, #2d2d44 100%);
+}
+
+.penalty-icon {
+  font-size: 36px;
+  display: block;
+  margin-bottom: 10px;
+}
+
+.penalty-card h4 {
+  color: #fff;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.penalty-amount {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 15px;
+}
+
+.penalty-card.severe .penalty-amount {
+  color: #f87171;
+}
+
+.penalty-card.moderate .penalty-amount {
+  color: #fbbf24;
+}
+
+.penalty-card ul {
+  margin: 0;
+  padding-left: 20px;
+  text-align: left;
+}
+
+.penalty-card li {
+  color: #94a3b8;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
 .explanation {
   color: #94a3b8;
   line-height: 1.6;
@@ -1436,8 +1779,22 @@ function closeHelp() {
   .size-comparison,
   .voice-comparison,
   .expert-grid,
-  .use-cases {
+  .use-cases,
+  .legal-box,
+  .penalty-box,
+  .context-recommendation {
     grid-template-columns: 1fr;
+  }
+
+  .attention-bar {
+    flex-direction: column;
+  }
+
+  .attention-zone.low {
+    border-left: none;
+    border-right: none;
+    border-top: 1px solid #3d3d5c;
+    border-bottom: 1px solid #3d3d5c;
   }
 
   .table-header,

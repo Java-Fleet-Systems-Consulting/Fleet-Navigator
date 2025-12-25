@@ -105,8 +105,19 @@ type CreateModeRequest struct {
 	IsDefault bool     `json:"is_default"`
 }
 
+// AntiHallucinationPrompt enthält die Regeln gegen Halluzinationen
+// Diese werden IMMER an jeden Experten-Prompt angehängt
+const AntiHallucinationPrompt = `
+
+## KRITISCH - KEINE HALLUZINATIONEN!
+- Erfinde NIEMALS Informationen, Fakten, Namen oder Quellen
+- Wenn du etwas nicht weisst, sage EHRLICH: "Das weiss ich leider nicht" oder "Dazu habe ich keine Informationen"
+- Unterscheide KLAR zwischen Fakten und deinen Vermutungen/Einschätzungen
+- Bei Unsicherheit: Lieber zugeben als raten oder erfinden
+- Du bist KEIN Mensch und hast KEINE persönlichen Erfahrungen - erfinde keine!`
+
 // GetFullPrompt generiert den vollständigen System-Prompt
-// Kombiniert Basis-Prompt mit aktivem Modus
+// Kombiniert Basis-Prompt mit aktivem Modus und Anti-Halluzinations-Regeln
 func (e *Expert) GetFullPrompt(mode *ExpertMode) string {
 	prompt := e.BasePrompt
 
@@ -115,14 +126,16 @@ func (e *Expert) GetFullPrompt(mode *ExpertMode) string {
 		prompt += mode.Prompt
 	}
 
-	// WICHTIG: LLM-Halluzinationen von Quellen verhindern
+	// IMMER Anti-Halluzinations-Regeln anhängen
+	prompt += AntiHallucinationPrompt
+
+	// Zusätzliche Quellen-Regeln je nach Web-Suche-Einstellung
 	if e.AutoWebSearch {
 		if e.WebSearchShowLinks {
 			// Web-Suche MIT Quellen-Anzeige: Nur ECHTE Quellen zitieren
 			prompt += `
 
-## WICHTIG - Quellen-Regel:
-Du hast Zugriff auf Web-Suche, aber NIEMALS darfst du Quellen erfinden!
+## Quellen-Regel (Web-Suche aktiv):
 - Zitiere NUR Quellen/Links die dir das Web-Such-System explizit bereitstellt
 - Wenn du keine Web-Suche durchgeführt hast → KEINE Quellen angeben
 - Erfinde NIEMALS URLs oder Referenzen aus deinem Gedächtnis
@@ -131,8 +144,7 @@ Du hast Zugriff auf Web-Suche, aber NIEMALS darfst du Quellen erfinden!
 			// Web-Suche OHNE Quellen-Anzeige (reines RAG): Inhalte nutzen, aber KEINE Verweise
 			prompt += `
 
-## WICHTIG - Keine Quellenverweise!
-Du nutzt Web-Recherche als Hintergrundwissen, aber:
+## Quellen-Regel (RAG-Modus):
 - Füge KEINE Quellenverweise wie [1], [2] etc. in deine Antwort ein
 - Nenne KEINE URLs oder Links
 - Antworte direkt und flüssig ohne Quellenangaben
@@ -140,7 +152,10 @@ Du nutzt Web-Recherche als Hintergrundwissen, aber:
 		}
 	} else {
 		// Keine Websuche → Niemals Quellen
-		prompt += "\n\n## WICHTIG - Keine Quellen!\nDu hast KEINE Websuche-Fähigkeit. Gib NIEMALS Quellen, Referenzen oder nummerierte Links an. Wenn du etwas nicht weißt, sage ehrlich: 'Das weiß ich leider nicht.'"
+		prompt += `
+
+## Quellen-Regel (Keine Web-Suche):
+Du hast KEINE Websuche-Fähigkeit. Gib NIEMALS Quellen, Referenzen oder nummerierte Links an.`
 	}
 
 	return prompt

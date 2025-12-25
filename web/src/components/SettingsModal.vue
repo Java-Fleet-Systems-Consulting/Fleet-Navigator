@@ -113,44 +113,6 @@
               </select>
             </div>
 
-            <!-- TopBar Toggle -->
-            <div class="mb-4 p-4 rounded-xl bg-white/50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
-              <div class="flex items-center justify-between">
-                <div class="flex-1">
-                  <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                    <Bars3Icon class="w-4 h-4 text-blue-500" />
-                    {{ $t('settings.general.showTopBar') }}
-                  </label>
-                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {{ $t('settings.general.showTopBarDesc') }}
-                  </p>
-                </div>
-                <label class="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" v-model="settings.showTopBar" @change="saveTopBarSetting" class="sr-only peer">
-                  <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-fleet-orange-300 dark:peer-focus:ring-fleet-orange-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-500 peer-checked:bg-fleet-orange-500"></div>
-                </label>
-              </div>
-            </div>
-
-            <!-- Willkommen-Anzeige Toggle -->
-            <div class="mb-4 p-4 rounded-xl bg-white/50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
-              <div class="flex items-center justify-between">
-                <div class="flex-1">
-                  <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                    <SparklesIcon class="w-4 h-4 text-fleet-orange-500" />
-                    {{ $t('settings.general.showWelcomeTiles') }}
-                  </label>
-                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {{ $t('settings.general.showWelcomeTilesDesc') }}
-                  </p>
-                </div>
-                <label class="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" v-model="settings.showWelcomeTiles" class="sr-only peer">
-                  <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-fleet-orange-300 dark:peer-focus:ring-fleet-orange-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-500 peer-checked:bg-fleet-orange-500"></div>
-                </label>
-              </div>
-            </div>
-
             <!-- Modus-Wechsel-Nachrichten Toggle -->
             <div class="mb-4 p-4 rounded-xl bg-white/50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
               <div class="flex items-center justify-between">
@@ -482,23 +444,8 @@
             <PostgreSQLMigration @status-change="onPostgresStatusChange" />
           </div>
 
-          <!-- TAB: Model Parameters -->
-          <div v-if="activeTab === 'parameters'">
-          <!-- Model Parameters -->
-          <section class="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-5 rounded-xl border border-gray-200/50 dark:border-gray-700/50 shadow-sm">
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-              <AdjustmentsHorizontalIcon class="w-5 h-5 text-orange-500" />
-              🎛️ LLM Sampling Parameter
-            </h3>
-
-            <SimpleSamplingParams
-              v-model="samplingParams"
-            />
-          </section>
-          </div>
-
-          <!-- TAB: Templates / System Prompts -->
-          <div v-if="activeTab === 'templates'">
+          <!-- TAB: Custom Modell (System-Prompts + Parameter) -->
+          <div v-if="activeTab === 'customModels'" class="space-y-6">
             <section class="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-5 rounded-xl border border-gray-200/50 dark:border-gray-700/50 shadow-sm">
               <div class="flex items-center justify-between mb-4">
                 <div>
@@ -576,6 +523,21 @@
                   </div>
                 </div>
               </div>
+            </section>
+
+            <!-- LLM Sampling Parameter Section -->
+            <section class="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-5 rounded-xl border border-gray-200/50 dark:border-gray-700/50 shadow-sm">
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <AdjustmentsHorizontalIcon class="w-5 h-5 text-orange-500" />
+                {{ $t('settings.customModels.samplingTitle') }}
+              </h3>
+              <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                {{ $t('settings.customModels.samplingDesc') }}
+              </p>
+
+              <SimpleSamplingParams
+                v-model="samplingParams"
+              />
             </section>
           </div>
 
@@ -1998,21 +1960,6 @@ watch(activeTab, async (newTab, oldTab) => {
   }
 })
 
-// Sync showWelcomeTiles with settingsStore (persistent)
-watch(() => settings.value.showWelcomeTiles, async (newValue) => {
-  settingsStore.settings.showWelcomeTiles = newValue
-  // Save to database
-  try {
-    await secureFetch('/api/settings/show-welcome-tiles', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newValue)
-    })
-  } catch (error) {
-    console.error('Failed to save showWelcomeTiles:', error)
-  }
-}, { immediate: false })
-
 // Sync cpuOnly with settingsStore (persistent) - für CPU-Only Mode Toggle
 watch(() => settings.value.cpuOnly, (newValue) => {
   settingsStore.settings.cpuOnly = newValue
@@ -2240,8 +2187,7 @@ const tabs = [
   { id: 'mates', label: 'Fleet Mates', icon: UsersIcon },
   { id: 'providers', label: 'LLM Provider', icon: CpuChipIcon },
   { id: 'database', label: 'Datenbank', icon: ServerIcon },
-  { id: 'parameters', label: 'Parameter', icon: AdjustmentsHorizontalIcon },
-  { id: 'templates', label: 'System-Prompts', icon: DocumentTextIcon },
+  { id: 'customModels', label: 'Custom Modell', icon: AdjustmentsHorizontalIcon },
   { id: 'personal', label: 'Persönliche Daten', icon: UserIcon },
   { id: 'observer', label: 'Observer', icon: ChartBarIcon },
   { id: 'agents', label: 'Agents', icon: SparklesIcon },
@@ -2385,13 +2331,14 @@ async function loadTtsSetting() {
   }
   // Dann vom Backend laden
   try {
-    const settings = await api.getSettings()
+    const settings = await api.getVoiceAssistantSettings()
     if (settings?.ttsEnabled !== undefined) {
       ttsEnabled.value = settings.ttsEnabled
       localStorage.setItem('ttsEnabled', String(ttsEnabled.value))
     }
   } catch (err) {
-    console.error('Failed to load TTS setting:', err)
+    // Endpoint nicht implementiert - ignorieren, localStorage-Wert behalten
+    console.debug('Voice assistant settings not available:', err.message)
   }
 }
 
@@ -2813,37 +2760,9 @@ onMounted(async () => {
   await loadSystemPrompts()
   await loadTrustedMatesCount()
   await loadWebSearchSettings()
-  await loadShowWelcomeTiles()
   await loadFileSearchStatus()
   await loadVoiceAssistantSettings()
 })
-
-async function loadShowWelcomeTiles() {
-  try {
-    const response = await fetch('/api/settings/show-welcome-tiles')
-    if (response.ok) {
-      const value = await response.json()
-      settings.value.showWelcomeTiles = value
-      settingsStore.settings.showWelcomeTiles = value
-    }
-  } catch (error) {
-    console.error('Failed to load showWelcomeTiles:', error)
-  }
-}
-
-// TopBar Setting speichern (sofort bei Änderung)
-async function saveTopBarSetting() {
-  try {
-    // Update settingsStore
-    settingsStore.settings.showTopBar = settings.value.showTopBar
-    // Save to backend database
-    await settingsStore.saveShowTopBarToBackend(settings.value.showTopBar)
-    success('TopBar-Einstellung gespeichert')
-  } catch (error) {
-    console.error('Failed to save showTopBar:', error)
-    errorToast('Fehler beim Speichern der TopBar-Einstellung')
-  }
-}
 
 // Schriftgröße setzen und persistieren (stufenlos)
 function setFontSize(size) {

@@ -434,10 +434,6 @@
       "themeDefaultDesc": "Dunkles Design mit lila Akzenten",
       "themeLawyer": "Anwalt",
       "themeLawyerDesc": "Helles Design mit Navy Blue & Gold",
-      "showTopBar": "TopBar anzeigen",
-      "showTopBarDesc": "Zeige die obere Navigationsleiste mit Modellauswahl und Buttons",
-      "showWelcomeTiles": "Willkommen-Anzeige",
-      "showWelcomeTilesDesc": "Zeigt Logo, Tipps und Vorschläge auf dem Willkommensbildschirm",
       "showModeSwitchMessages": "Modus-Wechsel anzeigen",
       "showModeSwitchMessagesDesc": "Zeigt Hinweise wenn ein Experte automatisch den Blickwinkel wechselt",
       "fontSize": "Schriftgröße",
@@ -559,6 +555,12 @@
       "setAsDefaultLabel": "Als Standard-Prompt setzen",
       "setAsDefaultHint": "Dieser Prompt wird automatisch für neue Chats verwendet",
       "update": "Aktualisieren"
+    },
+    "customModels": {
+      "title": "Custom Modell",
+      "subtitle": "System-Prompts und Sampling-Parameter für eigene Modelle",
+      "samplingTitle": "LLM Sampling Parameter",
+      "samplingDesc": "Feinabstimmung der Textgenerierung - Diese Parameter beeinflussen wie kreativ oder deterministisch das Modell antwortet"
     },
     "privacy": {
       "title": "Datenschutz",
@@ -1410,6 +1412,8 @@
     "startRecording": "Spracheingabe starten",
     "openModelManager": "Modellverwaltung öffnen",
     "openSettings": "Einstellungen öffnen",
+    "openMates": "Fleet Mates öffnen",
+    "openInfo": "Info & Version",
     "noExperts": "Keine Experten vorhanden.",
     "createInManager": "Erstellen Sie einen im Experten-Manager.",
     "themeSelect": "Theme wählen",
@@ -1749,5 +1753,17 @@
     "serverRunning": "Server läuft! FleetCode und Chat sind jetzt verfügbar.",
     "selectModelFirst": "Bitte wähle ein Modell aus!",
     "startError": "Fehler beim Starten"
+  },
+  "infoDialog": {
+    "title": "Über Fleet Navigator",
+    "subtitle": "KI-gestütztes Experten-System",
+    "version": "Version",
+    "buildTime": "Build-Datum",
+    "checkUpdate": "Nach Updates suchen",
+    "checking": "Suche nach Updates...",
+    "checkFailed": "Update-Prüfung fehlgeschlagen",
+    "newVersion": "Neue Version",
+    "viewRelease": "Release anzeigen",
+    "madeWith": "Made with Go & Vue.js"
   }
 }
