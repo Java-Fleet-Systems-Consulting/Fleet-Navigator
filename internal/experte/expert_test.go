@@ -5,10 +5,10 @@ import (
 	"testing"
 )
 
-// TestAntiHallucinationPromptExists prüft dass die Anti-Halluzinations-Konstante existiert
-func TestAntiHallucinationPromptExists(t *testing.T) {
-	if AntiHallucinationPrompt == "" {
-		t.Error("AntiHallucinationPrompt sollte nicht leer sein")
+// TestDefaultAntiHallucinationPromptExists prüft dass die Anti-Halluzinations-Konstante existiert
+func TestDefaultAntiHallucinationPromptExists(t *testing.T) {
+	if DefaultAntiHallucinationPrompt == "" {
+		t.Error("DefaultAntiHallucinationPrompt sollte nicht leer sein")
 	}
 
 	// Prüfe wichtige Bestandteile
@@ -18,11 +18,13 @@ func TestAntiHallucinationPromptExists(t *testing.T) {
 		"nicht weisst",
 		"Unterscheide KLAR",
 		"Lieber zugeben",
+		"IDENTITÄT",     // Neu: Identitäts-Schutz
+		"QUELLEN",       // Neu: Quellen-Relevanz
 	}
 
 	for _, phrase := range requiredPhrases {
-		if !strings.Contains(AntiHallucinationPrompt, phrase) {
-			t.Errorf("AntiHallucinationPrompt fehlt: '%s'", phrase)
+		if !strings.Contains(DefaultAntiHallucinationPrompt, phrase) {
+			t.Errorf("DefaultAntiHallucinationPrompt fehlt: '%s'", phrase)
 		}
 	}
 }
@@ -267,5 +269,91 @@ func TestDetectModeByKeywords(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestCustomAntiHallucinationPrompt prüft dass ein Custom-Prompt den Default überschreibt
+func TestCustomAntiHallucinationPrompt(t *testing.T) {
+	customPrompt := "## MEIN CUSTOM PROMPT\n- Regel 1\n- Regel 2"
+
+	expert := Expert{
+		Name:                    "Test Expert",
+		BasePrompt:              "Du bist ein Test-Experte.",
+		AntiHallucinationPrompt: customPrompt,
+	}
+
+	prompt := expert.GetFullPrompt(nil)
+
+	// Custom-Prompt muss enthalten sein
+	if !strings.Contains(prompt, "MEIN CUSTOM PROMPT") {
+		t.Error("GetFullPrompt sollte Custom-AntiHallucinationPrompt enthalten")
+	}
+
+	// Default-Prompt darf NICHT enthalten sein (prüfe auf spezifischen Text)
+	if strings.Contains(prompt, "KRITISCH - KEINE HALLUZINATIONEN") {
+		t.Error("GetFullPrompt sollte NICHT den Default-Prompt enthalten wenn Custom gesetzt")
+	}
+}
+
+// TestDefaultAntiHallucinationPromptUsedWhenEmpty prüft dass Default verwendet wird wenn Custom leer
+func TestDefaultAntiHallucinationPromptUsedWhenEmpty(t *testing.T) {
+	expert := Expert{
+		Name:                    "Test Expert",
+		BasePrompt:              "Du bist ein Test-Experte.",
+		AntiHallucinationPrompt: "", // Leer = Default verwenden
+	}
+
+	prompt := expert.GetFullPrompt(nil)
+
+	// Default-Prompt muss enthalten sein
+	if !strings.Contains(prompt, "KRITISCH - KEINE HALLUZINATIONEN") {
+		t.Error("GetFullPrompt sollte Default-AntiHallucinationPrompt enthalten wenn Custom leer")
+	}
+}
+
+// TestDefaultExpertsWebSearchShowLinksIsFalse prüft dass alle Default-Experten WebSearchShowLinks=false haben
+func TestDefaultExpertsWebSearchShowLinksIsFalse(t *testing.T) {
+	experts := DefaultExperts()
+
+	for _, expert := range experts {
+		t.Run(expert.Name, func(t *testing.T) {
+			if expert.WebSearchShowLinks {
+				t.Errorf("Experte '%s' sollte WebSearchShowLinks=false haben (RAG-Modus Default)", expert.Name)
+			}
+		})
+	}
+}
+
+// TestDefaultExpertsHaveAutoWebSearch prüft dass alle Default-Experten AutoWebSearch aktiviert haben
+func TestDefaultExpertsHaveAutoWebSearch(t *testing.T) {
+	experts := DefaultExperts()
+
+	for _, expert := range experts {
+		t.Run(expert.Name, func(t *testing.T) {
+			if !expert.AutoWebSearch {
+				t.Errorf("Experte '%s' sollte AutoWebSearch=true haben", expert.Name)
+			}
+		})
+	}
+}
+
+// TestGetFullPromptRAGMode prüft die Quellen-Regeln im RAG-Modus (WebSearchShowLinks=false)
+func TestGetFullPromptRAGMode(t *testing.T) {
+	expert := Expert{
+		Name:               "Test Expert",
+		BasePrompt:         "Du bist ein Test-Experte.",
+		AutoWebSearch:      true,
+		WebSearchShowLinks: false, // RAG-Modus
+	}
+
+	prompt := expert.GetFullPrompt(nil)
+
+	// RAG-Modus Regeln
+	if !strings.Contains(prompt, "RAG-Modus") {
+		t.Error("Sollte RAG-Modus Hinweis enthalten")
+	}
+
+	if !strings.Contains(prompt, "KEINE Quellenverweise") {
+		t.Error("Sollte 'KEINE Quellenverweise' im RAG-Modus enthalten")
 	}
 }

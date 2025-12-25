@@ -133,7 +133,7 @@ func (r *Repository) migrateKeywords() {
 
 	if count == 0 {
 		r.db.Exec(`ALTER TABLE experts ADD COLUMN auto_web_search INTEGER DEFAULT 0`)
-		r.db.Exec(`ALTER TABLE experts ADD COLUMN web_search_show_links INTEGER DEFAULT 1`) // Default: Links anzeigen
+		r.db.Exec(`ALTER TABLE experts ADD COLUMN web_search_show_links INTEGER DEFAULT 0`) // Default: RAG-Modus (keine Links)
 	}
 
 	// personality_prompt Spalte für experts (Kommunikationsstil)
@@ -143,6 +143,15 @@ func (r *Repository) migrateKeywords() {
 
 	if count == 0 {
 		r.db.Exec(`ALTER TABLE experts ADD COLUMN personality_prompt TEXT DEFAULT ''`)
+	}
+
+	// anti_hallucination_prompt Spalte für experts (Custom Anti-Halluzinations-Regeln)
+	r.db.QueryRow(`
+		SELECT COUNT(*) FROM pragma_table_info('experts') WHERE name='anti_hallucination_prompt'
+	`).Scan(&count)
+
+	if count == 0 {
+		r.db.Exec(`ALTER TABLE experts ADD COLUMN anti_hallucination_prompt TEXT DEFAULT ''`)
 	}
 }
 
@@ -176,12 +185,12 @@ func (r *Repository) CreateExpert(expert *Expert) error {
 	result, err := r.db.Exec(`
 		INSERT INTO experts (name, role, base_prompt, personality_prompt, base_model, avatar, description, voice, is_active, auto_mode_switch, sort_order,
 			default_num_ctx, default_max_tokens, default_temperature, default_top_p,
-			auto_web_search, web_search_show_links, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			auto_web_search, web_search_show_links, anti_hallucination_prompt, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, expert.Name, expert.Role, expert.BasePrompt, expert.PersonalityPrompt, expert.BaseModel, expert.Avatar, expert.Description, expert.Voice,
 		expert.IsActive, expert.AutoModeSwitch, expert.SortOrder,
 		expert.DefaultNumCtx, expert.DefaultMaxTokens, expert.DefaultTemperature, expert.DefaultTopP,
-		expert.AutoWebSearch, expert.WebSearchShowLinks, now, now)
+		expert.AutoWebSearch, expert.WebSearchShowLinks, expert.AntiHallucinationPrompt, now, now)
 
 	if err != nil {
 		return fmt.Errorf("Experte erstellen fehlgeschlagen: %w", err)
@@ -214,13 +223,13 @@ func (r *Repository) GetExpert(id int64) (*Expert, error) {
 	err := r.db.QueryRow(`
 		SELECT id, name, role, base_prompt, COALESCE(personality_prompt, ''), base_model, avatar, description, voice, is_active, auto_mode_switch, sort_order,
 			COALESCE(default_num_ctx, 16384), COALESCE(default_max_tokens, 4096), COALESCE(default_temperature, 0.7), COALESCE(default_top_p, 0.9),
-			COALESCE(auto_web_search, 0), COALESCE(web_search_show_links, 1),
+			COALESCE(auto_web_search, 0), COALESCE(web_search_show_links, 0), COALESCE(anti_hallucination_prompt, ''),
 			created_at, updated_at
 		FROM experts WHERE id = ?
 	`, id).Scan(&expert.ID, &expert.Name, &expert.Role, &expert.BasePrompt, &expert.PersonalityPrompt, &expert.BaseModel,
 		&expert.Avatar, &expert.Description, &expert.Voice, &expert.IsActive, &expert.AutoModeSwitch, &expert.SortOrder,
 		&expert.DefaultNumCtx, &expert.DefaultMaxTokens, &expert.DefaultTemperature, &expert.DefaultTopP,
-		&expert.AutoWebSearch, &expert.WebSearchShowLinks,
+		&expert.AutoWebSearch, &expert.WebSearchShowLinks, &expert.AntiHallucinationPrompt,
 		&expert.CreatedAt, &expert.UpdatedAt)
 
 	if err == sql.ErrNoRows {
@@ -244,7 +253,7 @@ func (r *Repository) GetExpert(id int64) (*Expert, error) {
 func (r *Repository) GetAllExperts(onlyActive bool) ([]Expert, error) {
 	query := `SELECT id, name, role, base_prompt, COALESCE(personality_prompt, ''), base_model, avatar, description, voice, is_active, auto_mode_switch, sort_order,
 		COALESCE(default_num_ctx, 16384), COALESCE(default_max_tokens, 4096), COALESCE(default_temperature, 0.7), COALESCE(default_top_p, 0.9),
-		COALESCE(auto_web_search, 0), COALESCE(web_search_show_links, 1),
+		COALESCE(auto_web_search, 0), COALESCE(web_search_show_links, 0), COALESCE(anti_hallucination_prompt, ''),
 		created_at, updated_at FROM experts`
 	if onlyActive {
 		query += " WHERE is_active = 1"
@@ -263,7 +272,7 @@ func (r *Repository) GetAllExperts(onlyActive bool) ([]Expert, error) {
 		err := rows.Scan(&e.ID, &e.Name, &e.Role, &e.BasePrompt, &e.PersonalityPrompt, &e.BaseModel,
 			&e.Avatar, &e.Description, &e.Voice, &e.IsActive, &e.AutoModeSwitch, &e.SortOrder,
 			&e.DefaultNumCtx, &e.DefaultMaxTokens, &e.DefaultTemperature, &e.DefaultTopP,
-			&e.AutoWebSearch, &e.WebSearchShowLinks,
+			&e.AutoWebSearch, &e.WebSearchShowLinks, &e.AntiHallucinationPrompt,
 			&e.CreatedAt, &e.UpdatedAt)
 		if err != nil {
 			return nil, err
@@ -353,6 +362,11 @@ func (r *Repository) UpdateExpert(id int64, req *UpdateExpertRequest) error {
 	if req.WebSearchShowLinks != nil {
 		updates = append(updates, "web_search_show_links = ?")
 		args = append(args, *req.WebSearchShowLinks)
+	}
+	// Anti-Halluzinations-Prompt
+	if req.AntiHallucinationPrompt != nil {
+		updates = append(updates, "anti_hallucination_prompt = ?")
+		args = append(args, *req.AntiHallucinationPrompt)
 	}
 
 	if len(updates) == 0 {

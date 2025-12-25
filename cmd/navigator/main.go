@@ -435,6 +435,7 @@ func (app *App) Run() {
 
 	// Experten Endpoints
 	mux.HandleFunc("/api/experts", app.handleExperts)
+	mux.HandleFunc("/api/experts/default-anti-hallucination", app.handleDefaultAntiHallucination)
 	mux.HandleFunc("/api/experts/modes/", app.handleModeByID) // Einzelne Modi bearbeiten/löschen
 	mux.HandleFunc("/api/experts/", app.handleExpertByID)
 
@@ -1282,6 +1283,19 @@ func (app *App) handleExperts(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+// handleDefaultAntiHallucination gibt den Standard-Anti-Halluzinations-Prompt zurück
+// GET /api/experts/default-anti-hallucination
+func (app *App) handleDefaultAntiHallucination(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	writeJSON(w, map[string]string{
+		"defaultPrompt": experte.DefaultAntiHallucinationPrompt,
+	})
 }
 
 func (app *App) handleExpertByID(w http.ResponseWriter, r *http.Request) {
