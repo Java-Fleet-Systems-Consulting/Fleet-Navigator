@@ -33,12 +33,7 @@ jobs:
         cd web
         npm ci
         npm run build
-        cd ..
-
-    - name: Copy Frontend to cmd/navigator
-      run: |
-        mkdir -p cmd/navigator/dist
-        cp -r web/dist/* cmd/navigator/dist/
+        ls -la ../cmd/navigator/dist/
 
     - name: Build Linux (amd64)
       run: |
