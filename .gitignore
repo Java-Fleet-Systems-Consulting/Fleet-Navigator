@@ -1,8 +1,8 @@
 # Build artifacts
 dist/
 *.exe
-main
-navigator
+/main
+/navigator
 
 # Dependencies
 web/node_modules/
