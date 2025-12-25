@@ -964,6 +964,29 @@ window.processSelectedFolders = processSelectedFolders;
 - SSE "delegation" Event ans Frontend mit expertId, expertName, expertAvatar
 - Frontend-Handler in `chatStore.js` wechselt automatisch zum Experten
 
+#### 18. Wake Word Audio funktioniert nicht (OFFEN)
+**Problem:** Wake Word Detection mit "Ewa" / "Hey Ewa" funktioniert nicht.
+**Status:** Audio-Capture im Browser nicht vollständig implementiert.
+**Betroffene Dateien:**
+- `internal/voice/service.go`
+- `web/src/composables/useVoice.js`
+**TODO:**
+- [ ] Browser Audio-Capture testen (MediaRecorder API)
+- [ ] Whisper STT Integration prüfen
+- [ ] Wake Word Pattern Matching debuggen
+
+#### 19. Tesseract OCR funktioniert nicht (OFFEN)
+**Problem:** Tesseract-Integration für Dokumentenverarbeitung funktioniert nicht.
+**Status:** Binary wird heruntergeladen, aber OCR-Aufruf schlägt fehl.
+**Betroffene Dateien:**
+- `internal/vision/vision.go` - `TesseractOCRFromBase64()`
+- `internal/setup/handlers.go` - Download-Funktion
+**TODO:**
+- [ ] Tesseract-Binary-Pfad prüfen (`~/.fleet-navigator/tesseract/`)
+- [ ] Sprachpakete (tessdata) auf Mirror bereitstellen
+- [ ] Error-Logging in Vision-Pipeline verbessern
+- [ ] Setup-Wizard UI für Tesseract-Installation
+
 ### Frontend-Kompatibilität: JSON-Mapping
 
 Das Vue-Frontend erwartet camelCase, Go-Structs sollten entsprechend gemappt werden:
@@ -986,18 +1009,21 @@ BaseModel  string `json:"model"`
 - [ ] FR-Übersetzung vervollständigen (~900 fehlende Keys)
 - [ ] ES-Übersetzung vervollständigen (~1150 fehlende Keys)
 - [x] TTS-Stimmen Download-Dialog bei Sprachwechsel
-- [x] Wake Words: "Ewa" funktioniert sprachübergreifend
+- [ ] ~~Wake Words: "Ewa" funktioniert sprachübergreifend~~ → Siehe Issue #18
 
-**Voice-System:**
-- [ ] Audio-Capture & Wake Word Detection fertigstellen
+**Voice-System (⚠️ FUNKTIONIERT NICHT - Issue #18):**
+- [ ] **Wake Word Detection funktioniert nicht** - Audio-Capture im Browser nicht vollständig
+- [ ] Browser MediaRecorder API Integration
+- [ ] Whisper STT Backend-Anbindung
 - [ ] TTS-Integration (Piper) vervollständigen
 - [ ] Sound-Dateien für Feedback einbetten
 
-**Tesseract OCR (Große Dokumente):**
+**Tesseract OCR (⚠️ FUNKTIONIERT NICHT - Issue #19):**
 - [x] Download-Funktion vom Mirror (alle OS)
-- [x] Tesseract-Binary in Vision-Pipeline integriert (`/api/vision/ocr`, `/api/vision/document`)
+- [ ] **OCR-Aufruf schlägt fehl** - Binary-Pfad oder Konfiguration prüfen
 - [ ] Sprachpakete DEU/ENG/TUR auf Mirror bereitstellen (Dateien fehlen!)
 - [ ] Setup-Wizard UI: Tesseract als Option anbieten
+- [ ] Error-Logging verbessern für Debugging
 
 **Sonstige:**
 - [ ] Custom Models vollständige DB-Implementation
