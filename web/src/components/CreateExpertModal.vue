@@ -358,6 +358,43 @@
             </div>
           </div>
 
+          <!-- Collapsible: Anti-Halluzinations-Einstellungen -->
+          <div class="border-t border-gray-200 dark:border-gray-700 pt-3">
+            <button
+              @click="showAntiHallucination = !showAntiHallucination"
+              class="flex items-center gap-1 text-xs font-medium text-purple-600 dark:text-purple-400"
+            >
+              <ChevronDownIcon class="w-3 h-3 transition-transform" :class="{ 'rotate-180': showAntiHallucination }" />
+              <ShieldExclamationIcon class="w-3 h-3" />
+              {{ $t('createExpertModal.antiHallucination') }}
+            </button>
+
+            <div v-if="showAntiHallucination" class="mt-3 space-y-2">
+              <div class="flex items-center justify-between mb-1">
+                <label class="text-xs text-gray-600 dark:text-gray-400">
+                  {{ $t('createExpertModal.antiHallucinationDesc') }}
+                </label>
+                <button
+                  @click="resetAntiHallucinationPrompt"
+                  type="button"
+                  class="flex items-center gap-1 px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"
+                >
+                  <ArrowPathIcon class="w-3 h-3" />
+                  {{ $t('createExpertModal.resetToDefault') }}
+                </button>
+              </div>
+              <textarea
+                v-model="form.antiHallucinationPrompt"
+                rows="6"
+                :placeholder="$t('createExpertModal.antiHallucinationPlaceholder')"
+                class="w-full px-3 py-2 text-xs bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none font-mono"
+              ></textarea>
+              <p class="text-[10px] text-gray-500 dark:text-gray-400">
+                {{ $t('createExpertModal.antiHallucinationHint') }}
+              </p>
+            </div>
+          </div>
+
           <!-- Collapsible: Blickwinkel (nur beim Bearbeiten) -->
           <div v-if="isEditing" class="border-t border-gray-200 dark:border-gray-700 pt-3">
             <button
@@ -450,7 +487,7 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { XMarkIcon, ChevronDownIcon, PlusIcon, TrashIcon, EyeIcon, DocumentArrowUpIcon, PencilIcon, GlobeAltIcon, DocumentMagnifyingGlassIcon, PhotoIcon, ArrowUpTrayIcon } from '@heroicons/vue/24/outline'
+import { XMarkIcon, ChevronDownIcon, PlusIcon, TrashIcon, EyeIcon, DocumentArrowUpIcon, PencilIcon, GlobeAltIcon, DocumentMagnifyingGlassIcon, PhotoIcon, ArrowUpTrayIcon, ShieldExclamationIcon, ArrowPathIcon } from '@heroicons/vue/24/outline'
 import axios from 'axios'
 import api from '../services/api'
 import { useChatStore } from '../stores/chatStore'
@@ -509,7 +546,9 @@ const form = ref({
   ragEnabled: false,
   ragEmbeddingModel: 'nomic-embed-text',
   ragTopK: 5,
-  ragThreshold: 0.7
+  ragThreshold: 0.7,
+  // Anti-Halluzinations-Prompt (leer = Default)
+  antiHallucinationPrompt: ''
 })
 
 // Verfügbare TTS Stimmen mit Beispielsätzen
@@ -584,10 +623,6 @@ async function testVoice(voice) {
 // PostgreSQL Status for RAG
 const postgresConnected = ref(false)
 
-onMounted(async () => {
-  await checkPostgresStatus()
-})
-
 async function checkPostgresStatus() {
   try {
     const response = await secureFetch('/api/database/status')
@@ -603,8 +638,35 @@ async function checkPostgresStatus() {
 
 const showAdvanced = ref(false)
 const showRAG = ref(false)
+const showAntiHallucination = ref(false)
 const showModes = ref(false)
 const isSaving = ref(false)
+
+// Default Anti-Halluzinations-Prompt (wird vom Backend geladen)
+const defaultAntiHallucinationPrompt = ref('')
+
+// Lade Default-Prompt beim Mounten
+onMounted(async () => {
+  await checkPostgresStatus()
+  await loadDefaultAntiHallucinationPrompt()
+})
+
+async function loadDefaultAntiHallucinationPrompt() {
+  try {
+    const response = await api.getDefaultAntiHallucinationPrompt()
+    defaultAntiHallucinationPrompt.value = response.defaultPrompt || ''
+  } catch (err) {
+    console.warn('Konnte Default Anti-Halluzinations-Prompt nicht laden:', err)
+  }
+}
+
+async function resetAntiHallucinationPrompt() {
+  if (!defaultAntiHallucinationPrompt.value) {
+    await loadDefaultAntiHallucinationPrompt()
+  }
+  form.value.antiHallucinationPrompt = defaultAntiHallucinationPrompt.value
+  success(t('createExpertModal.toast.promptReset'))
+}
 
 // Auto-Context: Beim Modell-Wechsel automatisch max. Context-Größe laden
 const isLoadingContext = ref(false)
@@ -676,7 +738,9 @@ watch(() => props.expert, (newExpert) => {
       ragEnabled: newExpert.ragEnabled ?? false,
       ragEmbeddingModel: newExpert.ragEmbeddingModel || 'nomic-embed-text',
       ragTopK: newExpert.ragTopK ?? 5,
-      ragThreshold: newExpert.ragThreshold ?? 0.7
+      ragThreshold: newExpert.ragThreshold ?? 0.7,
+      // Anti-Halluzinations-Prompt
+      antiHallucinationPrompt: newExpert.antiHallucinationPrompt || ''
     }
     modes.value = newExpert.modes ? [...newExpert.modes] : []
   } else {
@@ -717,11 +781,13 @@ function resetForm() {
     ragEnabled: false,
     ragEmbeddingModel: 'nomic-embed-text',
     ragTopK: 5,
-    ragThreshold: 0.7
+    ragThreshold: 0.7,
+    antiHallucinationPrompt: ''
   }
   modes.value = []
   showAdvanced.value = false
   showRAG.value = false
+  showAntiHallucination.value = false
   showModes.value = false
   showAddMode.value = false
   resetNewMode()
@@ -873,7 +939,9 @@ async function save() {
       auto_mode_switch: form.value.showSwitchNotification,
       // Web Search Settings
       autoWebSearch: form.value.autoWebSearch,
-      webSearchShowLinks: form.value.webSearchShowLinks
+      webSearchShowLinks: form.value.webSearchShowLinks,
+      // Anti-Halluzinations-Prompt
+      antiHallucinationPrompt: form.value.antiHallucinationPrompt
     }
 
     let savedExpertId = null

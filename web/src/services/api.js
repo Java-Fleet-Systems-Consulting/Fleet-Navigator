@@ -904,6 +904,11 @@ export default {
     return response.data
   },
 
+  async getDefaultAntiHallucinationPrompt() {
+    const response = await api.get('/experts/default-anti-hallucination')
+    return response.data
+  },
+
   async getExpertById(id) {
     const response = await api.get(`/experts/${id}`)
     return response.data

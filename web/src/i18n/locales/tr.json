@@ -1130,8 +1130,14 @@
       "fileReadError": "Dosya okuma hatası",
       "expertUpdated": "\"{name}\" uzmanı güncellendi",
       "expertCreated": "\"{name}\" uzmanı oluşturuldu",
-      "saveError": "Kaydetme hatası"
-    }
+      "saveError": "Kaydetme hatası",
+      "promptReset": "Anti-halüsinasyon istemi varsayılana sıfırlandı"
+    },
+    "antiHallucination": "Anti-Halüsinasyon Kuralları",
+    "antiHallucinationDesc": "Uydurma bilgi ve yanlış kaynakları önleme kuralları",
+    "antiHallucinationPlaceholder": "Boş bırakın = varsayılan kurallar kullanılır\n\nÖrnek:\n## HALÜSİNASYON YOK\n- ASLA bilgi uydurmayın...",
+    "antiHallucinationHint": "Boş = varsayılan kurallar kullanılır. Özel istem varsayılan kuralları tamamen geçersiz kılar.",
+    "resetToDefault": "Varsayılan"
   },
   "modelDownloadModal": {
     "title": "Model İndiriliyor",

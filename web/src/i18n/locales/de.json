@@ -1086,8 +1086,14 @@
       "fileReadError": "Fehler beim Lesen der Datei",
       "expertUpdated": "Experte \"{name}\" aktualisiert",
       "expertCreated": "Experte \"{name}\" erstellt",
-      "saveError": "Fehler beim Speichern"
-    }
+      "saveError": "Fehler beim Speichern",
+      "promptReset": "Anti-Halluzinations-Prompt auf Standard zurückgesetzt"
+    },
+    "antiHallucination": "Anti-Halluzinations-Regeln",
+    "antiHallucinationDesc": "Regeln gegen Erfindungen und falsche Quellen",
+    "antiHallucinationPlaceholder": "Leer lassen = Standard-Regeln verwenden\n\nBeispiel:\n## KEINE HALLUZINATIONEN\n- Erfinde NIEMALS Informationen...",
+    "antiHallucinationHint": "Leer = Standard-Regeln werden verwendet. Custom-Prompt überschreibt die Standard-Regeln komplett.",
+    "resetToDefault": "Standard"
   },
   "modelDownloadModal": {
     "title": "Modell wird heruntergeladen",

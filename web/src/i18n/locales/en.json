@@ -1086,8 +1086,14 @@
       "fileReadError": "Error reading file",
       "expertUpdated": "Expert \"{name}\" updated",
       "expertCreated": "Expert \"{name}\" created",
-      "saveError": "Error saving"
-    }
+      "saveError": "Error saving",
+      "promptReset": "Anti-hallucination prompt reset to default"
+    },
+    "antiHallucination": "Anti-Hallucination Rules",
+    "antiHallucinationDesc": "Rules to prevent fabrications and false sources",
+    "antiHallucinationPlaceholder": "Leave empty = use default rules\n\nExample:\n## NO HALLUCINATIONS\n- NEVER invent information...",
+    "antiHallucinationHint": "Empty = default rules are used. Custom prompt completely overrides the default rules.",
+    "resetToDefault": "Default"
   },
   "modelDownloadModal": {
     "title": "Downloading Model",
