@@ -6485,14 +6485,20 @@ func (app *App) handleUpdateStatus(w http.ResponseWriter, r *http.Request) {
 	updateInfo, err := u.CheckForUpdate()
 
 	if err != nil {
-		// Fehler beim Prüfen - trotzdem aktuelle Version zurückgeben
+		// Fehler beim Prüfen - benutzerfreundliche Meldung
+		message := "Sie verwenden die aktuelle Version"
+		if strings.Contains(err.Error(), "nicht gefunden") || strings.Contains(err.Error(), "404") {
+			// Repository oder Release nicht gefunden - normal bei Development-Builds
+			message = "Development-Build (kein Release verfügbar)"
+		} else if strings.Contains(err.Error(), "nicht erreichbar") {
+			message = "Update-Server nicht erreichbar"
+		}
 		writeJSON(w, map[string]interface{}{
 			"updateAvailable": false,
 			"currentVersion":  updater.Version,
 			"buildTime":       updater.BuildTime,
 			"latestVersion":   updater.Version,
-			"message":         fmt.Sprintf("Update-Prüfung fehlgeschlagen: %v", err),
-			"error":           err.Error(),
+			"message":         message,
 		})
 		return
 	}
