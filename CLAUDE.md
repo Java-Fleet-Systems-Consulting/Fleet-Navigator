@@ -378,6 +378,43 @@ POST   /api/experts/{id}/modes    # Modus hinzufügen
 - Maria (Marketing) - Marketing & Kommunikation
 - Thomas (IT-Berater) - IT & Digitalisierung
 
+**Anti-Halluzinations-System (NEU 2025-12-25):**
+- Konfigurierbarer Anti-Halluzinations-Prompt pro Experte
+- Default-Prompt mit Identitäts- und Quellen-Schutz
+- API: `GET /api/experts/default-anti-hallucination` für Reset auf Standard
+- Feld `antiHallucinationPrompt` in Expert-Struct (leer = Default verwenden)
+- WebSearchShowLinks Default auf `false` (RAG-Modus ohne sichtbare Quellen)
+
+**DELEGATE-System (NEU 2025-12-25):**
+
+Automatische Experten-Umschaltung wenn ein Experte delegiert:
+
+```
+Format: [[DELEGATE:ExpertName]]
+
+Beispiel:
+User: "Ich habe ein Problem mit einem Mietvertrag"
+Ewa: "Das klingt nach Mietrecht. Roland kann dir besser helfen."
+     [[DELEGATE:Roland]]
+
+→ Tag wird geparst und aus Antwort entfernt
+→ SSE "delegation" Event ans Frontend
+→ Frontend wechselt automatisch zu Roland
+```
+
+**SSE Event Format:**
+```json
+{
+  "type": "delegation",
+  "expertId": 2,
+  "expertName": "Roland",
+  "expertAvatar": "👨‍⚖️",
+  "message": "Ich verbinde dich mit Roland..."
+}
+```
+
+**Experten-Suche:** Findet Experten nach vollem Namen oder Vornamen (case-insensitive)
+
 ### Mate-Logik (`internal/mate/`)
 
 - **mate.go**: Mate-Typen und Capabilities
@@ -798,17 +835,18 @@ myService := mymodule.NewService()
 | 2025-12-13 | [CHANGELOG_2025-12-13.md](docs/CHANGELOG_2025-12-13.md) | **Mate Pairing & Encryption Fixes**: messageId Type Mismatch, Pairing-Synchronisation, Thunderbird-Funktionen exponiert |
 | 2025-12-12 | [CHANGELOG_2025-12-12.md](docs/CHANGELOG_2025-12-12.md) | **Provider-System festverdrahtet**: Model-Download Provider-abhängig, Provider-Wechsel mit Verbindungsprüfung & Fallback |
 | 2025-12-11 | [CHANGELOG_2025-12-11.md](docs/CHANGELOG_2025-12-11.md) | Provider-System Fix, Model Manager Download-Fix, Persistente Settings in DB |
+| 2025-12-25 | [CHANGELOG_2025-12-25.md](docs/CHANGELOG_2025-12-25.md) | **Anti-Halluzination konfigurierbar, DELEGATE-Tag für Experten-Umschaltung, Unit-Tests** |
 
 ---
 
-## Migration Status (Stand: 2025-12-13)
+## Migration Status (Stand: 2025-12-25)
 
 ### Übersicht nach Modulen
 
 | Modul | Status | Anmerkung |
 |-------|--------|-----------|
-| Chat/Streaming (SSE) | ✅ 95% | Start-Event, Content, Done-Token funktioniert |
-| Experten-System | ✅ 90% | CRUD, Modi, basePrompt-Fix (JSON camelCase) |
+| Chat/Streaming (SSE) | ✅ 95% | Start-Event, Content, Done-Token, Delegation-Event |
+| Experten-System | ✅ 95% | CRUD, Modi, Anti-Halluzination, DELEGATE-Tag |
 | Chat History/Persistenz | ✅ 90% | SQLite, Auto-Create bei chatId=0 |
 | Mate Pairing/Security | ✅ 90% | Ed25519, AES-256, Pairing-Code |
 | Vision/LLaVA | ✅ 85% | Bildanalyse, Streaming |
@@ -907,6 +945,24 @@ myService := mymodule.NewService()
 window.processExistingEmailsManual = processExistingEmailsManual;
 window.processSelectedFolders = processSelectedFolders;
 ```
+
+#### 16. LLM halluziniert Identität und Quellen (GELÖST - 2025-12-25)
+**Problem:** Bei "Wer bist du?" erfand das LLM Details wie "Ewa Marek" und zitierte irrelevante Quellen.
+**Ursache:** Anti-Halluzinations-Prompt hatte keine Regeln für Identitätsfragen und Quellen-Relevanz.
+**Lösung:**
+- Verstärkte Anti-Halluzinations-Regeln mit IDENTITÄT und QUELLEN Abschnitten
+- Bei Identitätsfragen: NUR Informationen aus System-Prompt verwenden
+- Quellen NUR zitieren wenn thematisch relevant
+- Anti-Halluzinations-Prompt jetzt pro Experte konfigurierbar
+
+#### 17. DELEGATE-Tag wurde im Output angezeigt (GELÖST - 2025-12-25)
+**Problem:** `[[DELEGATE:Roland]]` war im Chat sichtbar statt Experten-Umschaltung.
+**Ursache:** DELEGATE-Tag war in Prompts definiert, aber Backend verarbeitete ihn nicht.
+**Lösung:**
+- Regex-Parser in `handleChatSendStream()` für `[[DELEGATE:ExpertName]]`
+- Tag wird aus Antwort entfernt
+- SSE "delegation" Event ans Frontend mit expertId, expertName, expertAvatar
+- Frontend-Handler in `chatStore.js` wechselt automatisch zum Experten
 
 ### Frontend-Kompatibilität: JSON-Mapping
 
