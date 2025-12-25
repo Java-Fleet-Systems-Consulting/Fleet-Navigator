@@ -1,14 +1,21 @@
 // Package vision implements vision AI functionality using LLaVA via Ollama
+// with integrated Tesseract OCR for complete text extraction
 package vision
 
 import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -338,4 +345,272 @@ func IsVisionModel(modelName string) bool {
 		}
 	}
 	return false
+}
+
+// ===== Tesseract OCR Integration =====
+
+// CombinedAnalysisResult enthält Ergebnisse von Vision UND Tesseract
+type CombinedAnalysisResult struct {
+	*ImageAnalysis // Eingebettete Vision-Analyse
+
+	// Tesseract OCR
+	FullOCRText    string `json:"fullOcrText"`              // Vollständiger OCR-Text (alle Seiten)
+	TesseractUsed  bool   `json:"tesseractUsed"`            // Wurde Tesseract verwendet?
+	PageCount      int    `json:"pageCount"`                // Anzahl der Seiten
+	TesseractError string `json:"tesseractError,omitempty"` // Tesseract-Fehler falls aufgetreten
+}
+
+// AnalyzeDocumentWithOCR analysiert ein Dokument mit Vision UND Tesseract
+// Strategie:
+// 1. Tesseract: Schnelle Text-Extraktion (alle Seiten, unbegrenzt)
+// 2. Vision: Layout, Logos, Stempel, Unterschriften analysieren
+// 3. Vision validiert kritische OCR-Stellen (Beträge, Handschrift)
+func (s *Service) AnalyzeDocumentWithOCR(ctx context.Context, base64Image string, dataDir string) (*CombinedAnalysisResult, error) {
+	result := &CombinedAnalysisResult{
+		PageCount: 1,
+	}
+
+	// 1. Tesseract OCR für vollständigen Text (IMMER zuerst!)
+	ocrText, ocrErr := TesseractOCRFromBase64(base64Image, dataDir, "deu+eng+tur")
+	if ocrErr != nil {
+		log.Printf("[Vision+OCR] ⚠️ Tesseract-Fehler: %v", ocrErr)
+		result.TesseractError = ocrErr.Error()
+		result.TesseractUsed = false
+	} else {
+		result.FullOCRText = ocrText
+		result.TesseractUsed = true
+		log.Printf("[Vision+OCR] ✅ Tesseract: %d Zeichen extrahiert", len(ocrText))
+	}
+
+	// 2. Vision-Analyse für Layout/Struktur
+	visionResult, visionErr := s.AnalyzeDocument(ctx, base64Image)
+	if visionErr != nil {
+		log.Printf("[Vision+OCR] ⚠️ Vision-Fehler: %v", visionErr)
+		// Bei Vision-Fehler trotzdem OCR-Text zurückgeben
+		if result.TesseractUsed {
+			result.ImageAnalysis = &ImageAnalysis{
+				Description: "OCR-Text extrahiert (Vision nicht verfügbar)",
+				Text:        ocrText,
+			}
+		} else {
+			return nil, fmt.Errorf("weder Vision noch OCR verfügbar: %v", visionErr)
+		}
+	} else {
+		result.ImageAnalysis = visionResult
+
+		// 3. Vision validiert kritische OCR-Stellen (Beträge, Zahlen)
+		if result.TesseractUsed && len(ocrText) > 0 {
+			validatedText := s.validateOCRWithVision(ctx, base64Image, ocrText)
+			if validatedText != "" {
+				result.FullOCRText = validatedText
+				log.Printf("[Vision+OCR] ✅ OCR durch Vision validiert")
+			}
+		}
+
+		// OCR-Text in Text einfügen (vollständiger als Vision-OCR)
+		if result.TesseractUsed && len(result.FullOCRText) > len(visionResult.Text) {
+			result.Text = result.FullOCRText
+		}
+	}
+
+	return result, nil
+}
+
+// validateOCRWithVision nutzt Vision um kritische OCR-Stellen zu validieren
+// Prüft: Beträge, Zahlen, handschriftliche Texte
+func (s *Service) validateOCRWithVision(ctx context.Context, base64Image string, ocrText string) string {
+	// Prüfe ob kritische Stellen vorhanden sind (Zahlen, Beträge)
+	hasNumbers := strings.ContainsAny(ocrText, "0123456789")
+	hasEuro := strings.Contains(ocrText, "€") || strings.Contains(strings.ToLower(ocrText), "eur")
+
+	// Nur validieren wenn kritische Inhalte vorhanden
+	if !hasNumbers && !hasEuro {
+		return ocrText // Keine Validierung nötig
+	}
+
+	// Vision-Prompt für OCR-Validierung
+	prompt := fmt.Sprintf(`Überprüfe den folgenden OCR-Text auf Fehler, besonders bei:
+- Zahlen und Beträgen (€, EUR)
+- Handschriftlichen Texten
+- Datumsangaben
+- Namen und Adressen
+
+OCR-TEXT:
+%s
+
+Korrigiere offensichtliche OCR-Fehler (z.B. 0/O Verwechslung, l/1 Verwechslung).
+Gib NUR den korrigierten Text zurück, keine Erklärungen.
+Falls alles korrekt ist, gib den Text unverändert zurück.`, ocrText)
+
+	// Kurzes Timeout für Validierung (nicht blockieren wenn langsam)
+	validateCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	validated, err := s.AnalyzeImage(validateCtx, base64Image, prompt)
+	if err != nil {
+		log.Printf("[Vision+OCR] ⚠️ Validierung fehlgeschlagen: %v", err)
+		return ocrText // Original zurückgeben bei Fehler
+	}
+
+	// Prüfe ob Validierung sinnvoll ist (nicht zu kurz, nicht leer)
+	validated = strings.TrimSpace(validated)
+	if len(validated) < len(ocrText)/2 {
+		log.Printf("[Vision+OCR] ⚠️ Validierung zu kurz, ignoriert")
+		return ocrText
+	}
+
+	return validated
+}
+
+// TesseractOCR führt OCR mit Tesseract aus (unbegrenzte Textmenge)
+// dataDir ist das Fleet-Navigator Datenverzeichnis (~/.fleet-navigator)
+// languages sind die Sprachen für OCR (z.B. "deu+eng+tur")
+func TesseractOCR(imagePath string, dataDir string, languages string) (string, error) {
+	if languages == "" {
+		languages = "deu+eng" // Standard: Deutsch + Englisch
+	}
+
+	// Tesseract Binary finden
+	tesseractBinary := findTesseractBinary(dataDir)
+	if tesseractBinary == "" {
+		return "", fmt.Errorf("Tesseract nicht installiert. Bitte über Setup installieren.")
+	}
+
+	// Tessdata-Verzeichnis (Sprachdateien)
+	tessdataDir := filepath.Join(filepath.Dir(tesseractBinary), "tessdata")
+	if _, err := os.Stat(tessdataDir); os.IsNotExist(err) {
+		// Fallback: tessdata neben dem Binary
+		tessdataDir = filepath.Join(filepath.Dir(tesseractBinary), "..", "tessdata")
+	}
+
+	// Tesseract ausführen: tesseract input.png stdout -l deu+eng
+	args := []string{imagePath, "stdout", "-l", languages}
+
+	// Tessdata-Pfad setzen wenn vorhanden
+	if _, err := os.Stat(tessdataDir); err == nil {
+		args = append([]string{"--tessdata-dir", tessdataDir}, args...)
+	}
+
+	cmd := exec.Command(tesseractBinary, args...)
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	log.Printf("[Tesseract] Führe OCR aus: %s %v", tesseractBinary, args)
+
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("Tesseract-Fehler: %w (stderr: %s)", err, stderr.String())
+	}
+
+	text := strings.TrimSpace(stdout.String())
+	log.Printf("[Tesseract] ✅ OCR erfolgreich: %d Zeichen extrahiert", len(text))
+
+	return text, nil
+}
+
+// TesseractOCRFromBase64 führt OCR auf Base64-Bilddaten aus
+func TesseractOCRFromBase64(base64Image string, dataDir string, languages string) (string, error) {
+	// Base64 dekodieren
+	imageData, err := base64.StdEncoding.DecodeString(base64Image)
+	if err != nil {
+		// Versuche Data-URL Prefix zu entfernen
+		if strings.HasPrefix(base64Image, "data:") {
+			parts := strings.SplitN(base64Image, ",", 2)
+			if len(parts) == 2 {
+				imageData, err = base64.StdEncoding.DecodeString(parts[1])
+				if err != nil {
+					return "", fmt.Errorf("Base64-Dekodierung fehlgeschlagen: %w", err)
+				}
+			}
+		} else {
+			return "", fmt.Errorf("Base64-Dekodierung fehlgeschlagen: %w", err)
+		}
+	}
+
+	// Temporäre Datei erstellen
+	tmpFile, err := os.CreateTemp("", "fleet-ocr-*.png")
+	if err != nil {
+		return "", fmt.Errorf("Temp-Datei erstellen: %w", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	if _, err := tmpFile.Write(imageData); err != nil {
+		tmpFile.Close()
+		return "", fmt.Errorf("Temp-Datei schreiben: %w", err)
+	}
+	tmpFile.Close()
+
+	return TesseractOCR(tmpFile.Name(), dataDir, languages)
+}
+
+// findTesseractBinary sucht die Tesseract-Binary
+func findTesseractBinary(dataDir string) string {
+	var binaryName string
+	if runtime.GOOS == "windows" {
+		binaryName = "tesseract.exe"
+	} else {
+		binaryName = "tesseract"
+	}
+
+	// 1. Prüfe Fleet-Navigator Verzeichnis
+	fleetPath := filepath.Join(dataDir, "tesseract", binaryName)
+	if _, err := os.Stat(fleetPath); err == nil {
+		return fleetPath
+	}
+
+	// 2. Suche in Unterordnern (Windows-Build hat oft einen Unterordner)
+	tesseractDir := filepath.Join(dataDir, "tesseract")
+	var foundPath string
+	filepath.Walk(tesseractDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if info.Name() == binaryName && !info.IsDir() {
+			foundPath = path
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	if foundPath != "" {
+		return foundPath
+	}
+
+	// 3. Prüfe System-PATH (Linux/macOS)
+	if path, err := exec.LookPath(binaryName); err == nil {
+		return path
+	}
+
+	return ""
+}
+
+// IsTesseractInstalled prüft ob Tesseract installiert ist
+func IsTesseractInstalled(dataDir string) bool {
+	return findTesseractBinary(dataDir) != ""
+}
+
+// GetTesseractLanguages gibt die verfügbaren Sprachen zurück
+func GetTesseractLanguages(dataDir string) []string {
+	tesseractBinary := findTesseractBinary(dataDir)
+	if tesseractBinary == "" {
+		return nil
+	}
+
+	cmd := exec.Command(tesseractBinary, "--list-langs")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+
+	lines := strings.Split(string(output), "\n")
+	var languages []string
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		// Erste Zeile ist "List of available languages"
+		if line != "" && !strings.HasPrefix(line, "List") {
+			languages = append(languages, line)
+		}
+	}
+
+	return languages
 }

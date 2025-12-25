@@ -4266,7 +4266,7 @@ func (d *VoiceModelDownloader) DownloadTesseract(progressCh chan<- SetupProgress
 		zipURL = MirrorConfig.BaseURL + MirrorConfig.TesseractPath + "tesseract-ocr-windows-x64.zip"
 		zipName = "tesseract-ocr-windows-x64.zip"
 	case "darwin":
-		// macOS - Homebrew empfohlen, aber Mirror als Option
+		// macOS - falls später unterstützt
 		zipURL = MirrorConfig.BaseURL + MirrorConfig.TesseractPath + "tesseract-ocr-macos-arm64.tar.gz"
 		zipName = "tesseract-ocr-macos.tar.gz"
 	default:

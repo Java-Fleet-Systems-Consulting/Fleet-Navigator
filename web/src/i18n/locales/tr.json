@@ -518,7 +518,9 @@
       "all": "Tümü",
       "availableVoices": "Mevcut sesler (kurulumdan sonra):",
       "voiceStorageInfo": "Ses modelleri ~/.fleet-navigator/voice/ içinde saklanır.",
-      "clickToTest": "Test etmek için kurulu bir sese tıklayın."
+      "clickToTest": "Test etmek için kurulu bir sese tıklayın.",
+      "ttsEnabled": "Sesli okuma etkin",
+      "ttsEnabledDesc": "Hoparlör düğmesiyle yanıtların sesli okunmasını sağlar"
     },
     "hardware": {
       "title": "Donanım & Performans",
@@ -933,21 +935,78 @@
       "stt": {
         "title": "Konuşma Tanıma (Whisper)",
         "models": {
-          "tiny": { "name": "Tiny", "size": "75 MB", "desc": "Ultra hızlı, en düşük kalite" },
-          "base": { "name": "Base", "size": "148 MB", "desc": "Hızlı, iyi kalite" },
-          "small": { "name": "Small", "size": "488 MB", "desc": "Dengeli" },
-          "turbo": { "name": "Turbo Q5", "size": "574 MB", "desc": "6 kat hızlı, ~%98 kalite - Önerilen" },
-          "medium": { "name": "Medium", "size": "1.5 GB", "desc": "Yüksek kalite" },
-          "largeTurbo": { "name": "Large V3 Turbo", "size": "1.6 GB", "desc": "6 kat hızlı, ~%99 kalite" },
-          "large": { "name": "Large V3", "size": "3.1 GB", "desc": "Maksimum kalite" }
+          "tiny": {
+            "name": "Tiny",
+            "size": "75 MB",
+            "desc": "Ultra hızlı, en düşük kalite"
+          },
+          "base": {
+            "name": "Base",
+            "size": "148 MB",
+            "desc": "Hızlı, iyi kalite"
+          },
+          "small": {
+            "name": "Small",
+            "size": "488 MB",
+            "desc": "Dengeli"
+          },
+          "turbo": {
+            "name": "Turbo Q5",
+            "size": "574 MB",
+            "desc": "6 kat hızlı, ~%98 kalite - Önerilen"
+          },
+          "medium": {
+            "name": "Medium",
+            "size": "1.5 GB",
+            "desc": "Yüksek kalite"
+          },
+          "largeTurbo": {
+            "name": "Large V3 Turbo",
+            "size": "1.6 GB",
+            "desc": "6 kat hızlı, ~%99 kalite"
+          },
+          "large": {
+            "name": "Large V3",
+            "size": "3.1 GB",
+            "desc": "Maksimum kalite"
+          }
         }
       },
       "tts": {
         "title": "Sesli Okuma (Piper)",
         "voices": {
-          "fahrettin": { "name": "Fahrettin", "desc": "Erkek, nötr - Varsayılan" },
-          "fettah": { "name": "Fettah", "desc": "Erkek, net" }
+          "fahrettin": {
+            "name": "Fahrettin",
+            "desc": "Erkek, nötr - Varsayılan"
+          },
+          "fettah": {
+            "name": "Fettah",
+            "desc": "Erkek, net"
+          },
+          "thorsten": {
+            "name": "Thorsten",
+            "desc": "Erkek, nötr - Almanca varsayılan"
+          },
+          "kerstin": {
+            "name": "Kerstin",
+            "desc": "Kadın, net - Almanca"
+          }
         }
+      },
+      "downloadComplete": "Ses kurulumu tamamlandı!",
+      "loading": "Ses seçenekleri yükleniyor...",
+      "preparingDownload": "Ses bileşenleri hazırlanıyor...",
+      "skipInfo": "Ses özellikleri isteğe bağlıdır. Bunları daha sonra ayarlardan etkinleştirebilirsiniz.",
+      "startingDownload": "Ses indirmesi başlatılıyor...",
+      "piper": {
+        "title": "Sesli Okuma (Piper)",
+        "description": "Yapay zeka yanıtlarını sesli okur. Bir Türkçe ses seçin.",
+        "notAvailable": "Piper bu platformda henüz mevcut değil."
+      },
+      "whisper": {
+        "title": "Konuşma Tanıma (Whisper)",
+        "description": "Konuşulan dili metne dönüştürür. Donanımınıza göre bir model seçin.",
+        "notAvailable": "Whisper bu platformda henüz mevcut değil."
       }
     },
     "complete": {

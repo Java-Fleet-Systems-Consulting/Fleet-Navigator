@@ -77,7 +77,8 @@
       "Bash(mkdir:*)",
       "WebFetch(domain:hf-mirror.com)",
       "Bash(LD_LIBRARY_PATH=. timeout 5 ./llama-server:*)",
-      "Bash(tar tzf:*)"
+      "Bash(tar tzf:*)",
+      "Bash(git config:*)"
     ],
     "deny": [],
     "ask": []

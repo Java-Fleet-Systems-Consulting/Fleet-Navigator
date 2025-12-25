@@ -422,6 +422,60 @@ func (s *Service) GetChatContext(expertID int64, currentModeID *int64, message s
 	return ctx, nil
 }
 
+// GetChatContextWithLocale ist wie GetChatContext, aber mit Sprachunterstützung
+// locale kann "de", "en" oder "tr" sein - bei "de" wird keine Übersetzung angewendet
+func (s *Service) GetChatContextWithLocale(expertID int64, currentModeID *int64, message string, locale string) (*ChatContext, error) {
+	// Normales GetChatContext aufrufen
+	ctx, err := s.GetChatContext(expertID, currentModeID, message)
+	if err != nil {
+		return nil, err
+	}
+
+	// Wenn nicht Deutsch, Übersetzung anwenden
+	if locale != "" && locale != "de" {
+		lang := ParseLanguage(locale)
+		if lang != LangDE {
+			// Experten-Übersetzung holen
+			translation := GetExpertTranslation(ctx.Expert.Name, lang)
+			if translation != nil {
+				// Übersetzung auf den Experten anwenden
+				ctx.Expert.Role = translation.Role
+				ctx.Expert.Description = translation.Description
+				ctx.Expert.BasePrompt = translation.BasePrompt
+				if translation.PersonalityPrompt != "" {
+					ctx.Expert.PersonalityPrompt = translation.PersonalityPrompt
+				}
+
+				// Modus-Übersetzung anwenden wenn vorhanden
+				if ctx.ActiveMode != nil {
+					// Suche die Übersetzung für den aktiven Modus
+					// Der Key ist der deutsche Modusname
+					for germanName, modeTranslation := range translation.Modes {
+						// Finde den Modus mit dem deutschen Namen
+						for i := range ctx.Expert.Modes {
+							if ctx.Expert.Modes[i].Name == germanName || ctx.Expert.Modes[i].Name == modeTranslation.Name {
+								ctx.Expert.Modes[i].Name = modeTranslation.Name
+								ctx.Expert.Modes[i].Prompt = modeTranslation.Prompt
+								// Wenn das der aktive Modus ist, auch dort aktualisieren
+								if ctx.ActiveMode.ID == ctx.Expert.Modes[i].ID {
+									ctx.ActiveMode.Name = modeTranslation.Name
+									ctx.ActiveMode.Prompt = modeTranslation.Prompt
+								}
+								break
+							}
+						}
+					}
+				}
+
+				// System-Prompt mit übersetztem Content neu generieren
+				ctx.SystemPrompt = ctx.Expert.GetFullPrompt(ctx.ActiveMode)
+			}
+		}
+	}
+
+	return ctx, nil
+}
+
 // GetExpertSummary gibt eine Zusammenfassung für die UI
 func (s *Service) GetExpertSummary() []map[string]interface{} {
 	experts := s.GetActiveExperts()

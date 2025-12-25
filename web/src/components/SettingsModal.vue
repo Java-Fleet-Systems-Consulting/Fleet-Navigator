@@ -57,11 +57,44 @@
               </label>
               <select
                 v-model="settings.language"
+                @change="onLanguageChange"
                 class="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-all focus:ring-2 focus:ring-fleet-orange-500 focus:border-transparent"
               >
                 <option value="de">🇩🇪 Deutsch</option>
                 <option value="en">🇬🇧 English</option>
+                <option value="tr">🇹🇷 Türkçe</option>
               </select>
+
+              <!-- Voice Download Dialog -->
+              <div v-if="showVoiceDownloadDialog" class="mt-3 p-4 bg-amber-50 dark:bg-amber-900/30 rounded-xl border border-amber-200 dark:border-amber-700">
+                <div class="flex items-start gap-3">
+                  <SpeakerWaveIcon class="w-6 h-6 text-amber-500 flex-shrink-0 mt-0.5" />
+                  <div class="flex-1">
+                    <h4 class="font-medium text-amber-800 dark:text-amber-200">
+                      {{ $t('settings.voice.voicesNeeded') || 'Stimmen für diese Sprache benötigt' }}
+                    </h4>
+                    <p class="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                      {{ voiceDownloadInfo.availableVoices?.map(v => v.name).join(', ') }}
+                    </p>
+                    <div class="flex gap-2 mt-3">
+                      <button
+                        @click="downloadVoicesForLanguage"
+                        :disabled="isDownloadingVoices"
+                        class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                      >
+                        <span v-if="isDownloadingVoices">{{ $t('common.downloading') || 'Wird heruntergeladen...' }}</span>
+                        <span v-else>{{ $t('settings.voice.downloadVoices') || 'Stimmen herunterladen' }}</span>
+                      </button>
+                      <button
+                        @click="showVoiceDownloadDialog = false"
+                        class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium transition-colors"
+                      >
+                        {{ $t('common.later') || 'Später' }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <!-- Theme -->
@@ -1883,6 +1916,7 @@ import {
   LightBulbIcon,
   ChartBarIcon
 } from '@heroicons/vue/24/outline'
+import { useI18n } from 'vue-i18n'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useChatStore } from '../stores/chatStore'
 import PersonalInfoTab from './PersonalInfoTab.vue'
@@ -1925,6 +1959,11 @@ function onPostgresStatusChange(connected) {
 const settings = ref({ ...settingsStore.settings })
 const saving = ref(false)
 const resetting = ref(false)
+
+// Voice Download Dialog für Sprachwechsel
+const showVoiceDownloadDialog = ref(false)
+const voiceDownloadInfo = ref({ availableVoices: [], installedVoices: [] })
+const isDownloadingVoices = ref(false)
 
 // Sampling Parameters
 const samplingParams = ref({})
@@ -2037,6 +2076,112 @@ async function loadFileSearchStatus() {
     }
   } catch (err) {
     console.error('Failed to load file search status:', err)
+  }
+}
+
+// ========================================
+// Sprachwechsel mit Voice-Download Dialog
+// ========================================
+
+async function onLanguageChange() {
+  const newLocale = settings.value.language
+  console.log('[Settings] Sprachwechsel zu:', newLocale)
+
+  try {
+    // Backend informieren
+    const response = await fetch('/api/settings/language', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ locale: newLocale })
+    })
+
+    if (response.ok) {
+      const result = await response.json()
+      console.log('[Settings] Sprache gewechselt:', result)
+
+      // i18n aktualisieren
+      const { locale } = useI18n()
+      locale.value = newLocale
+      localStorage.setItem('fleet-navigator-locale', newLocale)
+      document.documentElement.lang = newLocale
+
+      // Prüfen ob Voice-Download nötig
+      if (result.needsVoiceDownload && result.availableVoices?.length > 0) {
+        voiceDownloadInfo.value = result
+        showVoiceDownloadDialog.value = true
+      }
+
+      showToast(`Sprache auf ${newLocale.toUpperCase()} gewechselt`, 'success')
+    }
+  } catch (err) {
+    console.error('[Settings] Sprachwechsel fehlgeschlagen:', err)
+    showToast('Sprachwechsel fehlgeschlagen', 'error')
+  }
+}
+
+async function downloadVoicesForLanguage() {
+  const locale = settings.value.language
+  const voices = voiceDownloadInfo.value.availableVoices || []
+
+  if (voices.length === 0) {
+    showVoiceDownloadDialog.value = false
+    return
+  }
+
+  isDownloadingVoices.value = true
+
+  try {
+    // Piper-Stimme herunterladen (mit korrektem Endpoint via SSE)
+    const voice = voices[0]
+    // Voice-ID Format: de_DE-thorsten-medium oder tr_TR-fahrettin-medium
+    const voiceId = voice.id
+
+    console.log('[Settings] Lade Stimme herunter:', voiceId)
+
+    // SSE-basierter Download wie im SetupWizard
+    await new Promise((resolve, reject) => {
+      const eventSource = new EventSource(
+        `/api/setup/download-voice?component=piper&modelId=${encodeURIComponent(voiceId)}&lang=${locale}`
+      )
+
+      eventSource.onmessage = (event) => {
+        try {
+          const progress = JSON.parse(event.data)
+
+          if (progress.message) {
+            console.log('[Settings] Voice-Download:', progress.message)
+          }
+
+          if (progress.done) {
+            eventSource.close()
+            if (progress.error) {
+              reject(new Error(progress.error))
+            } else {
+              resolve()
+            }
+          }
+        } catch (e) {
+          console.error('[Settings] Progress Parse Fehler:', e)
+        }
+      }
+
+      eventSource.onerror = (error) => {
+        console.error('[Settings] SSE Fehler:', error)
+        eventSource.close()
+        reject(new Error('Download-Verbindung unterbrochen'))
+      }
+    })
+
+    showToast(`Stimme "${voice.name}" heruntergeladen!`, 'success')
+    showVoiceDownloadDialog.value = false
+
+    // Voice-Status neu laden
+    await loadVoiceStatus()
+  } catch (err) {
+    console.error('[Settings] Voice-Download fehlgeschlagen:', err)
+    showToast(`Download fehlgeschlagen: ${err.message}`, 'error')
+  } finally {
+    isDownloadingVoices.value = false
   }
 }
 

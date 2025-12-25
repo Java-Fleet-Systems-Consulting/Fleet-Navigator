@@ -1,5 +1,18 @@
 # CLAUDE.md - Fleet Navigator Go
 
+## Git-Konfiguration
+
+**Repository:** `Java-Fleet-Systems-Consulting/Fleet-Navigator`
+**SSH-Host:** `github-kofi`
+**Committer:** Kofi Mensah <kofi.mensah@java-developer.online>
+
+```bash
+# Remote-URL Format:
+git remote set-url origin git@github-kofi:Java-Fleet-Systems-Consulting/Fleet-Navigator.git
+```
+
+---
+
 ## Projekt-Übersicht
 
 **Fleet Navigator Go** ist die Go-Portierung des Fleet Navigator - ein KI-gestütztes Experten-System für kleine Büros. Die Anwendung kombiniert ein Go-Backend mit einem Vue.js-Frontend in einer einzigen ausführbaren Datei.
@@ -453,27 +466,54 @@ POST /api/tools/fetch        # URL-Inhalt abrufen
 - Filtert nach Dateitypen
 - Setzt MateConnection Interface voraus
 
-### Vision-System (`internal/llamaserver/vision.go`) - AKTUALISIERT
+### Vision-System + Tesseract OCR (`internal/vision/`) - AKTUALISIERT 2024-12-24
 
-Vision/Multimodal über llama-server mit LLaVA-Modellen:
+**Kombinierte Vision + Tesseract Analyse:**
+- **Vision (LLaVA)**: Analysiert Logos, Stempel, Unterschriften, Layout
+- **Tesseract OCR**: Extrahiert ALLEN Text (unbegrenzt Seiten!)
+- **Beide zusammen**: Vollständige Dokumentanalyse für DB-Speicherung
+
+**WICHTIG - Strategie für große Dokumente:**
+1. Tesseract extrahiert Text aus ALLEN Seiten (keine Begrenzung)
+2. Vision analysiert nur erste Seite (Layout, visuelle Elemente)
+3. Kombiniertes Ergebnis wird in Chat-DB gespeichert
+4. Bei späteren Anfragen: Text bereits in DB, kein erneutes OCR nötig
 
 **Features:**
 - Bildanalyse mit deutschem Prompt
 - **Smart-Analyse**: Automatische Erkennung ob Text-Dokument oder Bild
 - Dokumentenerkennung (Rechnungen, Briefe, Verträge, etc.)
-- OCR-Textextraktion
+- **Tesseract OCR**: Unbegrenzte Textextraktion
+- **Vision-Validierung**: Vision korrigiert OCR-Fehler (Zahlen, Beträge)
 - PDF-zu-Bild Konvertierung (benötigt poppler-utils)
-- Streaming-Unterstützung
+- **PDF-Streaming**: Fortschrittsanzeige für große PDFs (89+ Seiten)
 
 **API Endpoints:**
 ```
 POST /api/vision/analyze     # Bild analysieren (Streaming)
-POST /api/vision/document    # Dokument analysieren (strukturiert)
-GET  /api/vision/status      # Vision-Status prüfen
-POST /api/vision/ocr         # Text-Extraktion (OCR)
+POST /api/vision/document    # Dokument mit Vision+Tesseract analysieren
+POST /api/vision/pdf-stream  # PDF mit Fortschrittsanzeige (SSE)
+GET  /api/vision/status      # Vision+Tesseract Status
+POST /api/vision/ocr         # Reine Text-Extraktion (OCR)
 POST /api/vision/smart       # Smart-Analyse (Text vs. Bild automatisch)
 POST /api/vision/classify    # Schnelle Klassifizierung (Dokumenttyp)
 ```
+
+**Tesseract Integration:**
+```
+~/.fleet-navigator/tesseract/
+├── tesseract(.exe)          # Binary
+├── tessdata/
+│   ├── deu.traineddata      # Deutsch
+│   ├── eng.traineddata      # Englisch
+│   └── tur.traineddata      # Türkisch
+└── [weitere DLLs/libs]
+```
+
+**Mirror-Dateien für Tesseract:**
+- `tesseract-ocr-windows-x64.zip` (~80 MB)
+- `tesseract-ocr-linux-x64.tar.gz` (~70 MB)
+- `tesseract-ocr-macos-arm64.tar.gz` (~70 MB)
 
 **Erkannte Dokumenttypen:**
 - `invoice` - Rechnung
@@ -508,8 +548,8 @@ Abstrahiertes LLM-System wie in der Java-Version:
 ProviderManager
 ├── OllamaProvider (implementiert)
 │   └── HTTP zu Ollama Server
-└── LlamaCppProvider (geplant)
-    └── go-llama.cpp oder llama-server
+└── LlamaServerProvider (implementiert)
+    └── llama-server Prozess (automatisch gestartet)
 
 ModelRegistry
 ├── Chat-Modelle (qwen2.5, llama3.2, mistral, phi3)
@@ -533,7 +573,76 @@ ModelService
 
 ## Noch offen (Verbesserungen)
 
-- [ ] llama.cpp Provider (go-llama.cpp Integration)
+### Internationalisierung (i18n)
+- [x] Frontend DE/EN - Vollständig (1563 Keys)
+- [x] Frontend TR - Vollständig (1569 Keys, inkl. türkische Stimmen)
+- [ ] Frontend FR - Unvollständig (~41%, ~640/1563 Keys)
+- [ ] Frontend ES - Unvollständig (~26%, ~400/1563 Keys)
+- [x] Backend-Prompts DE/EN/TR - Experten-System vollständig übersetzt
+- [x] Multilinguale Prompts: Verstehen Input in jeder Sprache, Output in Benutzersprache
+  - Deutsche Begriffe werden mit Übersetzung zitiert: "Mahnung (payment reminder)"
+
+### Sprachwechsel zur Laufzeit ✅ (Implementiert 2025-12-24)
+
+**Implementiert:**
+- [x] API-Endpoint: `GET/POST /api/settings/language` (cmd/navigator/main.go:7700)
+- [x] Experten-Prompts dynamisch laden: `GetChatContextWithLocale()` (internal/experte/service.go:425)
+- [x] Sprache in Settings-DB persistieren: `SaveLocale()` / `GetLocale()`
+- [x] Frontend-Integration: `useLocale.js` ruft Backend bei Sprachwechsel auf
+- [x] TTS-Stimmen-Info: Backend gibt verfügbare/installierte Stimmen zurück
+  - DE: Thorsten, Kerstin
+  - TR: Fahrettin, Fettah
+  - EN: Amy, Ryan
+- [x] Wake Words: "Ewa" / "Hey Ewa" funktioniert sprachübergreifend (Name)
+
+**Noch offen:**
+- [x] TTS-Stimmen: Automatischer Download-Dialog bei Sprachwechsel (SettingsModal.vue)
+- [ ] Chat-Context: UI-Hinweis dass neue Chats in neuer Sprache sind
+
+**Ablauf bei Sprachwechsel:**
+```
+1. User wählt TR im Frontend (SettingsModal)
+2. useLocale.setLocale('tr') ruft POST /api/settings/language auf
+3. Backend: Speichert in Settings-DB, gibt Stimmen-Info zurück
+4. Frontend: Dispatcht 'locale-changed' Event
+5. Nächster Chat: GetChatContextWithLocale() verwendet TR-Prompts
+```
+
+### Voice-System (internal/voice/)
+- [ ] Echte Sound-Dateien laden (Aktivierung, Deaktivierung, Fehler)
+- [ ] Chat-Engine Integration (Antworten vom LLM holen)
+- [ ] Echte Audio-Ausgabe implementieren (TTS-Abspielen)
+- [ ] Sound-Dateien einbetten (embed.go)
+- [ ] Voice-System für mehrsprachige Prompts anpassen (DE/EN/TR)
+
+### Tesseract OCR (Dokumentenverarbeitung)
+**Wichtig für Experten-System:** Ermöglicht Verarbeitung von mehr als 4 gescannten A4-Seiten!
+
+**Bereits implementiert:**
+- [x] Download-Funktion vom Mirror (`internal/setup/handlers.go:DownloadTesseract`)
+  - Windows: `tesseract-ocr-windows-x64.zip` (portable)
+  - Linux: `tesseract-ocr-linux-x64.tar.gz`
+  - macOS: Nicht unterstützt (Hinweis auf `brew install tesseract`)
+- [x] Installation nach `~/.fleet-navigator/tesseract/`
+- [x] API-Endpoint: `POST /api/vision/ocr` - Reine OCR (Tesseract direkt)
+- [x] API-Endpoint: `POST /api/vision/document` - Vision + Tesseract kombiniert
+- [x] Tesseract-Binary wird aufgerufen (`vision.TesseractOCRFromBase64()`)
+- [x] Vision validiert kritische OCR-Stellen (Beträge, Zahlen)
+- [x] Status-Endpoint: `GET /api/vision/status` zeigt Tesseract-Installation
+
+**Noch offen:**
+- [ ] Sprachpakete: DEU, ENG, TUR auf **Mirror bereitstellen** (Dateien fehlen!)
+- [ ] Setup-Wizard UI: Tesseract-Installation als Option anbieten
+- [ ] PDF-OCR: Tesseract in `handleVisionPDFStream` integrieren (aktuell nur Vision)
+
+**Vorteile gegenüber reiner Vision:**
+- Keine Token-Limits für Text-Dokumente (unbegrenzte Seitenzahl!)
+- Schneller als Vision-Modell
+- Weniger VRAM-Verbrauch
+- Roland, Franziska & Co. können komplette Verträge/Dokumente analysieren
+
+### Sonstige
+- [x] ~~llama.cpp Provider~~ → llama-server implementiert (go-llama.cpp verworfen - zu hoher Wartungsaufwand)
 - [ ] Vollständige Signatur-Verifikation bei Auth
 - [x] CORS Konfiguration (implementiert in main.go)
 - [ ] Rate Limiting
@@ -550,7 +659,7 @@ ModelService
 | RAM-Verbrauch | ~200-500 MB | ~20-50 MB |
 | Dependencies | Maven, viele | Minimal (2) |
 | Experten-System | ✅ Vollständig | ✅ Implementiert |
-| LLM Provider | ✅ Ollama + llama.cpp | ✅ Ollama (llama.cpp geplant) |
+| LLM Provider | ✅ Ollama + llama.cpp | ✅ Ollama + llama-server |
 | Model Registry | ✅ Vollständig | ✅ Implementiert |
 | Tool-System | ✅ WebSearch, FileSearch | ✅ Implementiert |
 | Vision/LLaVA | ✅ Vollständig | ✅ Implementiert |
@@ -726,13 +835,32 @@ BaseModel  string `json:"model"`
 
 ### Offene Punkte (Go-Version)
 
+**Internationalisierung:**
+- [x] TR-Übersetzung vollständig (17 Keys hinzugefügt am 2025-12-24)
+- [x] **Sprachwechsel zur Laufzeit** implementiert (Prompts + Stimmen-Info)
+- [ ] FR-Übersetzung vervollständigen (~900 fehlende Keys)
+- [ ] ES-Übersetzung vervollständigen (~1150 fehlende Keys)
+- [x] TTS-Stimmen Download-Dialog bei Sprachwechsel
+- [x] Wake Words: "Ewa" funktioniert sprachübergreifend
+
+**Voice-System:**
+- [ ] Audio-Capture & Wake Word Detection fertigstellen
+- [ ] TTS-Integration (Piper) vervollständigen
+- [ ] Sound-Dateien für Feedback einbetten
+
+**Tesseract OCR (Große Dokumente):**
+- [x] Download-Funktion vom Mirror (alle OS)
+- [x] Tesseract-Binary in Vision-Pipeline integriert (`/api/vision/ocr`, `/api/vision/document`)
+- [ ] Sprachpakete DEU/ENG/TUR auf Mirror bereitstellen (Dateien fehlen!)
+- [ ] Setup-Wizard UI: Tesseract als Option anbieten
+
+**Sonstige:**
 - [ ] Custom Models vollständige DB-Implementation
 - [ ] System Prompts CRUD komplett
-- [ ] llama.cpp Provider Integration
 - [ ] Provider-Switching UI
 - [ ] Weitere Frontend-API-Kompatibilitätstests
-- [ ] Rate Limiting & CORS
-- [ ] Graceful Shutdown
+- [ ] Rate Limiting
+- [x] Graceful Shutdown (implementiert)
 - [ ] Multi-User / Login-System
 
 ### Empfehlung

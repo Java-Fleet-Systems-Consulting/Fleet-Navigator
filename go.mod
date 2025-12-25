@@ -5,6 +5,7 @@ go 1.24.0
 toolchain go1.24.10
 
 require (
+	github.com/go-pdf/fpdf v0.9.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/shirou/gopsutil/v3 v3.24.5
 	golang.org/x/crypto v0.45.0
@@ -15,7 +16,6 @@ require (
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
-	github.com/go-pdf/fpdf v0.9.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
