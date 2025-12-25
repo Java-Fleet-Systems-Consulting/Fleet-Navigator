@@ -15,8 +15,8 @@ import (
 
 const (
 	// GitHub Repository
-	GitHubOwner = "java-fleet"
-	GitHubRepo  = "fleet-navigator"
+	GitHubOwner = "Java-Fleet-Systems-Consulting"
+	GitHubRepo  = "Fleet-Navigator"
 
 	// API URL
 	GitHubAPIURL = "https://api.github.com/repos/%s/%s/releases/latest"
