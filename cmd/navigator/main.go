@@ -2149,8 +2149,49 @@ WICHTIG: Der Benutzer hat obige Dokumente hochgeladen. Beziehe dich in deiner An
 		log.Printf("Web-Suche: Quellen-Footer NICHT angehängt (WebSearchHideLinks=true)")
 	}
 
+	// DELEGATE-Tag prüfen und verarbeiten
+	// Format: [[DELEGATE:ExpertName]] am Ende der Nachricht
+	var delegatedToExpert *experte.Expert
+	delegatePattern := regexp.MustCompile(`\[\[DELEGATE:([^\]]+)\]\]`)
+	if matches := delegatePattern.FindStringSubmatch(fullResponse); len(matches) > 1 {
+		delegateExpertName := strings.TrimSpace(matches[1])
+		log.Printf("DELEGATE-Tag erkannt: '%s'", delegateExpertName)
+
+		// Experten nach Name suchen
+		allExperts, err := app.expertenService.GetAllExperts(true)
+		if err == nil {
+			for _, exp := range allExperts {
+				// Vergleich mit vollem Namen oder Vornamen
+				if strings.EqualFold(exp.Name, delegateExpertName) ||
+					strings.HasPrefix(strings.ToLower(exp.Name), strings.ToLower(delegateExpertName)) {
+					delegatedToExpert = &exp
+					log.Printf("DELEGATE: Experte gefunden - %s (ID: %d)", exp.Name, exp.ID)
+					break
+				}
+			}
+		}
+
+		// Tag aus der Antwort entfernen
+		fullResponse = strings.TrimSpace(delegatePattern.ReplaceAllString(fullResponse, ""))
+	}
+
 	// Token-Approximation (ca. 4 Zeichen pro Token)
 	tokenCount := len(fullResponse) / 4
+
+	// Wenn delegiert wurde, Event an Frontend senden
+	if delegatedToExpert != nil {
+		delegateData := map[string]interface{}{
+			"type":         "delegation",
+			"expertId":     delegatedToExpert.ID,
+			"expertName":   delegatedToExpert.Name,
+			"expertAvatar": delegatedToExpert.Avatar,
+			"message":      fmt.Sprintf("Ich verbinde dich mit %s...", delegatedToExpert.Name),
+		}
+		delegateJSON, _ := json.Marshal(delegateData)
+		fmt.Fprintf(w, "data: %s\n\n", delegateJSON)
+		flusher.Flush()
+		log.Printf("DELEGATION-Event gesendet: Umschaltung zu %s (ID: %d)", delegatedToExpert.Name, delegatedToExpert.ID)
+	}
 
 	// WICHTIG: Done-Event mit Tokens senden (Frontend erwartet das!)
 	doneData := map[string]interface{}{
