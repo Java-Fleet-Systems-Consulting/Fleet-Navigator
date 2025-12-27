@@ -98,6 +98,8 @@ jobs:
   release:
     needs: [build-navigator]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     steps:
       - name: Download all binaries
