@@ -198,6 +198,7 @@
             :speed="downloadProgress.speedMBps ? downloadProgress.speedMBps.toFixed(1) : '0.0'"
             :statusMessages="downloadStatusMessages"
             :downloadType="currentDownloadType"
+            :showHelpLinks="true"
             @cancel="cancelDownload"
           />
         </div>
@@ -252,6 +253,7 @@
             :speed="downloadProgress.speedMBps ? downloadProgress.speedMBps.toFixed(1) : '0.0'"
             :statusMessages="downloadStatusMessages"
             downloadType="vision"
+            :showHelpLinks="true"
             @cancel="cancelDownload"
           />
         </div>
@@ -352,6 +354,7 @@
             :speed="downloadProgress.speedMBps ? downloadProgress.speedMBps.toFixed(1) : '0.0'"
             :statusMessages="downloadStatusMessages"
             :downloadType="currentVoiceDownloadType"
+            :showHelpLinks="true"
             @cancel="cancelDownload"
           />
         </div>

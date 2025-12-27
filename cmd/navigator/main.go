@@ -278,6 +278,12 @@ Bei rechtlichen Fragen weise darauf hin, dass du nur allgemeine Informationen ge
 	llamaConfig.Port = 2026 // llama-server läuft auf Port 2026
 	llamaSrv := llamaserver.NewServer(llamaConfig)
 
+	// Unvollständige Downloads bereinigen (abgebrochene Downloads löschen)
+	cleanedCount := llamaSrv.CleanupIncompleteDownloads()
+	if cleanedCount > 0 {
+		log.Printf("🗑️ %d unvollständige Modell-Downloads beim Start bereinigt", cleanedCount)
+	}
+
 	// Prüfen ob GGUF-Modelle vorhanden sind und Server automatisch starten
 	models, _ := llamaSrv.GetAvailableModels()
 	if len(models) > 0 && llamaConfig.BinaryPath != "" {
@@ -297,6 +303,11 @@ Bei rechtlichen Fragen weise darauf hin, dass du nur allgemeine Informationen ge
 		log.Printf("Starte llama-server mit Modell: %s", defaultModel)
 		if err := llamaSrv.Start(defaultModel); err != nil {
 			log.Printf("WARNUNG: llama-server konnte nicht gestartet werden: %v", err)
+		} else {
+			// Watchdog aktivieren für automatischen Neustart bei Crash
+			if err := llamaSrv.EnableWatchdog(); err != nil {
+				log.Printf("WARNUNG: Watchdog konnte nicht aktiviert werden: %v", err)
+			}
 		}
 	} else if llamaConfig.BinaryPath == "" {
 		log.Printf("WARNUNG: llama-server Binary nicht gefunden")
@@ -482,6 +493,7 @@ func (app *App) Run() {
 	mux.HandleFunc("/api/llm/models/details/", app.handleLLMModelDetails)
 	mux.HandleFunc("/api/llm/chat", app.handleLLMChat)
 	mux.HandleFunc("/api/llm/status", app.handleLLMStatus)
+	mux.HandleFunc("/api/llm/switch-model", app.handleLLMSwitchModel) // SSE: Model wechseln
 
 	// LLM Provider Endpoints (Frontend-kompatibel)
 	mux.HandleFunc("/api/llm/providers/active", app.handleLLMProviderActive)
@@ -554,6 +566,7 @@ func (app *App) Run() {
 	mux.HandleFunc("/api/llamaserver/models/recommended", app.handleLlamaServerModelsRecommended)
 	mux.HandleFunc("/api/llamaserver/download", app.handleLlamaServerDownload)
 	mux.HandleFunc("/api/llamaserver/config", app.handleLlamaServerConfig)
+	mux.HandleFunc("/api/llamaserver/watchdog", app.handleLlamaServerWatchdog)
 
 	// Context-Management
 	mux.HandleFunc("/api/llamaserver/context", app.handleLlamaServerContextChange)    // POST Context-Größe ändern (mit Neustart)
@@ -1912,8 +1925,14 @@ func (app *App) handleChatSendStream(w http.ResponseWriter, r *http.Request) {
 	var webSearchContext string
 	var sourcesFooter string
 
-	// Web-Suche durchführen wenn aktiviert
-	if req.WebSearchEnabled && app.searchService != nil {
+	// Prüfen ob Identitätsfrage (bei diesen KEINE Web-Suche - sonst irrelevante Quellen)
+	isIdentityQuestion := isIdentityOrPersonalQuestion(req.Message)
+	if isIdentityQuestion {
+		log.Printf("Identitätsfrage erkannt - Web-Suche übersprungen: '%s'", req.Message)
+	}
+
+	// Web-Suche durchführen wenn aktiviert UND keine Identitätsfrage
+	if req.WebSearchEnabled && app.searchService != nil && !isIdentityQuestion {
 		log.Printf("Web-Suche aktiviert (Nachrichtenlänge: %d Zeichen)", len(req.Message))
 
 		// Query optimieren (konversationelle Frage -> Suchbegriff)
@@ -2032,10 +2051,31 @@ WICHTIG: Der Benutzer hat obige Dokumente hochgeladen. Beziehe dich in deiner An
 		log.Printf("Dokument-Kontext hinzugefügt: %d Zeichen", len(req.DocumentContext))
 	}
 
+	// Technische Selbstwahrnehmung: Modellname hinzufügen
+	// Das LLM kann bei Fragen wie "Auf welchem Modell basierst du?" korrekt antworten
+	currentModelName := model
+	if currentModelName == "" && app.llamaServer != nil {
+		status := app.llamaServer.GetStatus()
+		currentModelName = status.ModelName
+	}
+	if currentModelName != "" {
+		finalSystemPrompt += fmt.Sprintf(`
+
+## TECHNISCHE SELBSTWAHRNEHMUNG
+Du basierst auf dem Sprachmodell: %s
+Bei Fragen nach deinem Modell, deiner Technologie oder deiner Basis kannst du dies erwähnen.
+Du bist eine KI und kein Mensch - sei ehrlich darüber wenn gefragt.`, currentModelName)
+	}
+
 	conversationMessages = append(conversationMessages, chat.Message{
 		Role:    "system",
 		Content: finalSystemPrompt,
 	})
+
+	// Debug: System-Prompt Länge loggen (inkl. Anti-Halluzination Check)
+	hasAntiHallucination := strings.Contains(finalSystemPrompt, "KEINE HALLUZINATIONEN") ||
+		strings.Contains(finalSystemPrompt, "IDENTITÄT")
+	log.Printf("System-Prompt: %d Zeichen, Anti-Halluzination: %v", len(finalSystemPrompt), hasAntiHallucination)
 
 	for _, m := range messages {
 		role := "user"
@@ -2083,12 +2123,79 @@ WICHTIG: Der Benutzer hat obige Dokumente hochgeladen. Beziehe dich in deiner An
 		flusher.Flush()
 	}
 
-	// Streaming-Antwort basierend auf aktivem Provider
-	var fullResponse string
+	// Prüfen ob Model-Switch für llama-server nötig ist
 	activeProvider := app.settingsService.GetActiveProvider()
 	if activeProvider == "" {
 		activeProvider = "llama-server"
 	}
+
+	// Bei llama-server: Automatisch zum Experten-Modell wechseln wenn nötig
+	if activeProvider == "llama-server" && app.llamaServer != nil && model != "" {
+		status := app.llamaServer.GetStatus()
+		currentModel := strings.ToLower(status.ModelName)
+		targetModel := strings.ToLower(model)
+
+		// Prüfen ob Model-Wechsel nötig ist
+		needsSwitch := currentModel != "" && targetModel != "" &&
+			currentModel != targetModel &&
+			!strings.Contains(currentModel, targetModel) &&
+			!strings.Contains(targetModel, currentModel)
+
+		if needsSwitch {
+			// SSE Event: Model-Swap startet
+			startData := map[string]interface{}{
+				"type":    "model_swap",
+				"status":  "starting",
+				"model":   model,
+				"message": fmt.Sprintf("🔄 Lade Modell %s...", model),
+			}
+			jsonData, _ := json.Marshal(startData)
+			fmt.Fprintf(w, "data: %s\n\n", jsonData)
+			flusher.Flush()
+
+			// Model wechseln MIT FALLBACK
+			switched, usedFallback, actualModel, switchErr := app.llamaServer.SwitchToModelWithFallback(model)
+			if switchErr != nil {
+				log.Printf("Model-Switch Fehler: %v (verwende aktuelles Modell)", switchErr)
+				// SSE Event: Fehler
+				errorData := map[string]interface{}{
+					"type":    "model_swap",
+					"status":  "error",
+					"message": fmt.Sprintf("❌ Modell-Wechsel fehlgeschlagen: %v", switchErr),
+				}
+				jsonData, _ := json.Marshal(errorData)
+				fmt.Fprintf(w, "data: %s\n\n", jsonData)
+				flusher.Flush()
+			} else if usedFallback {
+				// SSE Event: Fallback verwendet
+				fallbackData := map[string]interface{}{
+					"type":    "model_swap",
+					"status":  "fallback",
+					"model":   actualModel,
+					"message": fmt.Sprintf("⚠️ Modell '%s' nicht gefunden - verwende %s", model, actualModel),
+				}
+				jsonData, _ := json.Marshal(fallbackData)
+				fmt.Fprintf(w, "data: %s\n\n", jsonData)
+				flusher.Flush()
+				log.Printf("Model-Switch Fallback: %s -> %s (statt %s)", currentModel, actualModel, model)
+			} else if switched {
+				// SSE Event: Model-Swap abgeschlossen
+				completeData := map[string]interface{}{
+					"type":    "model_swap",
+					"status":  "complete",
+					"model":   actualModel,
+					"message": fmt.Sprintf("✅ %s bereit!", actualModel),
+				}
+				jsonData, _ := json.Marshal(completeData)
+				fmt.Fprintf(w, "data: %s\n\n", jsonData)
+				flusher.Flush()
+				log.Printf("Model-Switch abgeschlossen: %s", model)
+			}
+		}
+	}
+
+	// Streaming-Antwort
+	var fullResponse string
 
 	streamCallback := func(content string, done bool) {
 		fullResponse += content
@@ -5424,7 +5531,114 @@ func (app *App) handleLlamaServerStatus(w http.ResponseWriter, r *http.Request) 
 	}
 
 	status := app.llamaServer.GetStatus()
-	writeJSON(w, status)
+
+	// Watchdog-Statistiken hinzufügen
+	response := map[string]interface{}{
+		"running":     status.Running,
+		"modelName":   status.ModelName,
+		"modelPath":   status.ModelPath,
+		"port":        status.Port,
+		"contextSize": status.ContextSize,
+		"gpuLayers":   status.GPULayers,
+		"watchdog": map[string]interface{}{
+			"enabled": app.llamaServer.IsWatchdogEnabled(),
+		},
+	}
+
+	// Detaillierte Watchdog-Stats wenn aktiviert
+	if stats := app.llamaServer.GetWatchdogStats(); stats != nil {
+		response["watchdog"] = map[string]interface{}{
+			"enabled":          true,
+			"isHealthy":        stats.IsHealthy,
+			"totalRestarts":    stats.TotalRestarts,
+			"lastRestartTime":  stats.LastRestartTime,
+			"lastRestartReason": stats.LastRestartReason,
+			"consecutiveFails": stats.ConsecutiveFails,
+			"startTime":        stats.StartTime,
+		}
+	}
+
+	writeJSON(w, response)
+}
+
+// handleLlamaServerWatchdog verwaltet den Watchdog
+// GET: Status abrufen
+// POST: Aktivieren/Deaktivieren {"enabled": true/false} oder Neustart erzwingen {"forceRestart": true}
+func (app *App) handleLlamaServerWatchdog(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		// Status zurückgeben
+		stats := app.llamaServer.GetWatchdogStats()
+		response := map[string]interface{}{
+			"enabled": app.llamaServer.IsWatchdogEnabled(),
+		}
+		if stats != nil {
+			response["stats"] = stats
+		}
+		writeJSON(w, response)
+
+	case http.MethodPost:
+		var req struct {
+			Enabled      *bool  `json:"enabled"`
+			ForceRestart bool   `json:"forceRestart"`
+			Reason       string `json:"reason"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		// Manueller Neustart erzwingen
+		if req.ForceRestart {
+			reason := req.Reason
+			if reason == "" {
+				reason = "Manuell via API"
+			}
+			if err := app.llamaServer.ForceWatchdogRestart(reason); err != nil {
+				writeJSON(w, map[string]interface{}{
+					"success": false,
+					"error":   err.Error(),
+				})
+				return
+			}
+			writeJSON(w, map[string]interface{}{
+				"success": true,
+				"message": "Neustart wurde initiiert",
+			})
+			return
+		}
+
+		// Watchdog aktivieren/deaktivieren
+		if req.Enabled != nil {
+			if *req.Enabled {
+				if err := app.llamaServer.EnableWatchdog(); err != nil {
+					writeJSON(w, map[string]interface{}{
+						"success": false,
+						"error":   err.Error(),
+					})
+					return
+				}
+				writeJSON(w, map[string]interface{}{
+					"success": true,
+					"message": "Watchdog aktiviert",
+					"enabled": true,
+				})
+			} else {
+				app.llamaServer.DisableWatchdog()
+				writeJSON(w, map[string]interface{}{
+					"success": true,
+					"message": "Watchdog deaktiviert",
+					"enabled": false,
+				})
+			}
+			return
+		}
+
+		http.Error(w, "Kein gültiger Parameter", http.StatusBadRequest)
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 // handleLlamaServerStart startet den llama-server mit einem Modell
@@ -5537,6 +5751,98 @@ func (app *App) handleLlamaServerRestart(w http.ResponseWriter, r *http.Request)
 		"success": true,
 		"message": "llama-server neu gestartet",
 	})
+}
+
+// handleLLMSwitchModel wechselt das aktive Modell (SSE für Fortschritt)
+// GET /api/llm/switch-model?model=modelname
+func (app *App) handleLLMSwitchModel(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	modelName := r.URL.Query().Get("model")
+	if modelName == "" {
+		http.Error(w, "model parameter required", http.StatusBadRequest)
+		return
+	}
+
+	// SSE-Header setzen
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	// Helper für SSE-Events
+	sendEvent := func(data map[string]interface{}) {
+		jsonData, _ := json.Marshal(data)
+		fmt.Fprintf(w, "data: %s\n\n", jsonData)
+		flusher.Flush()
+	}
+
+	// Aktuelles Modell prüfen
+	status := app.llamaServer.GetStatus()
+	currentModel := strings.ToLower(status.ModelName)
+	targetModel := strings.ToLower(modelName)
+
+	// Prüfen ob Wechsel nötig
+	needsSwitch := currentModel != "" && targetModel != "" &&
+		currentModel != targetModel &&
+		!strings.Contains(currentModel, targetModel) &&
+		!strings.Contains(targetModel, currentModel)
+
+	if !needsSwitch {
+		sendEvent(map[string]interface{}{
+			"type":    "model_swap",
+			"status":  "complete",
+			"model":   modelName,
+			"message": fmt.Sprintf("✅ %s bereits geladen", modelName),
+		})
+		return
+	}
+
+	// Model-Swap startet
+	sendEvent(map[string]interface{}{
+		"type":    "model_swap",
+		"status":  "starting",
+		"model":   modelName,
+		"message": fmt.Sprintf("🔄 Lade Modell %s...", modelName),
+	})
+
+	// Model wechseln
+	switched, switchErr := app.llamaServer.SwitchToModelIfNeeded(modelName)
+	if switchErr != nil {
+		log.Printf("Model-Switch Fehler: %v", switchErr)
+		sendEvent(map[string]interface{}{
+			"type":    "model_swap",
+			"status":  "error",
+			"message": fmt.Sprintf("❌ Fehler: %v", switchErr),
+		})
+		return
+	}
+
+	if switched {
+		sendEvent(map[string]interface{}{
+			"type":    "model_swap",
+			"status":  "complete",
+			"model":   modelName,
+			"message": fmt.Sprintf("✅ %s bereit!", modelName),
+		})
+		log.Printf("Model-Switch via API abgeschlossen: %s", modelName)
+	} else {
+		sendEvent(map[string]interface{}{
+			"type":    "model_swap",
+			"status":  "complete",
+			"model":   modelName,
+			"message": fmt.Sprintf("✅ %s bereits aktiv", modelName),
+		})
+	}
 }
 
 // handleLlamaServerContextChange ändert die Context-Größe und startet den Server neu
@@ -5654,6 +5960,12 @@ func (app *App) handleLlamaServerDownload(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Download-Logik ausgelagert
+	app.downloadGGUFModel(w, req.URL, req.Filename)
+}
+
+// downloadGGUFModel führt den eigentlichen GGUF-Download durch (SSE für Progress)
+func (app *App) downloadGGUFModel(w http.ResponseWriter, downloadURL, filename string) {
 	// SSE-Header setzen
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -5671,30 +5983,50 @@ func (app *App) handleLlamaServerDownload(w http.ResponseWriter, r *http.Request
 
 	// Download in Goroutine starten
 	go func() {
-		err := app.llamaServer.DownloadModel(req.URL, req.Filename, progressChan)
+		err := app.llamaServer.DownloadModel(downloadURL, filename, progressChan)
 		if err != nil {
 			progressChan <- llamaserver.DownloadProgress{
-				Filename: req.Filename,
+				Filename: filename,
 				Percent:  -1, // Fehler-Signal
 			}
 		}
 		close(progressChan)
 	}()
 
-	// Progress-Events senden
+	// Progress-Events senden (benannte Events für EventSource)
 	for progress := range progressChan {
 		if progress.Percent < 0 {
-			// Fehler
-			fmt.Fprintf(w, "data: {\"error\":\"Download fehlgeschlagen\",\"done\":true}\n\n")
+			// Fehler-Event
+			fmt.Fprintf(w, "event: error\ndata: Download fehlgeschlagen\n\n")
 		} else {
-			data, _ := json.Marshal(progress)
-			fmt.Fprintf(w, "data: %s\n\n", data)
+			// Progress-Event im Format: "50% | 2.5 GB / 5.0 GB | 45.2 MB/s"
+			downloadedMB := float64(progress.Downloaded) / (1024 * 1024)
+			totalMB := float64(progress.Total) / (1024 * 1024)
+			speedMBs := progress.Speed // Bereits in MB/s vom llamaserver
+
+			var progressMsg string
+			if totalMB >= 1024 {
+				// GB anzeigen
+				progressMsg = fmt.Sprintf("%.0f%% | %.2f GB / %.2f GB | %.1f MB/s",
+					float64(progress.Percent),
+					downloadedMB/1024,
+					totalMB/1024,
+					speedMBs)
+			} else {
+				// MB anzeigen
+				progressMsg = fmt.Sprintf("%.0f%% | %.0f MB / %.0f MB | %.1f MB/s",
+					float64(progress.Percent),
+					downloadedMB,
+					totalMB,
+					speedMBs)
+			}
+			fmt.Fprintf(w, "event: progress\ndata: %s\n\n", progressMsg)
 		}
 		flusher.Flush()
 	}
 
-	// Abschluss-Event
-	fmt.Fprintf(w, "data: {\"done\":true,\"filename\":\"%s\"}\n\n", req.Filename)
+	// Complete-Event
+	fmt.Fprintf(w, "event: complete\ndata: Download abgeschlossen: %s\n\n", filename)
 	flusher.Flush()
 }
 
@@ -7731,53 +8063,304 @@ func (app *App) handleHuggingFaceDetails(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Suche in der Registry nach dem Modell
+	// 1. Suche in der Registry nach dem Modell
 	registry := app.modelService.GetRegistry()
 	for _, entry := range registry.GetAllModels() {
 		if entry.HuggingFaceRepo == modelId || entry.DisplayName == modelId || entry.ID == modelId {
 			writeJSON(w, map[string]interface{}{
-				"name":           entry.DisplayName,
-				"description":    entry.Description,
-				"huggingFaceId":  entry.HuggingFaceRepo,
-				"size":           entry.SizeHuman,
-				"sizeBytes":      entry.SizeBytes,
-				"parameters":     entry.ParameterSize,
-				"quantization":   entry.Quantization,
-				"category":       entry.Category,
-				"downloadUrl":    fmt.Sprintf("https://huggingface.co/%s/resolve/main/%s", entry.HuggingFaceRepo, entry.Filename),
-				"ggufFile":       entry.Filename,
-				"license":        entry.License,
-				"languages":      entry.Languages,
-				"useCases":       entry.UseCases,
-				"minRamGB":       entry.MinRamGB,
+				"name":             entry.DisplayName,
+				"description":      entry.Description,
+				"huggingFaceId":    entry.HuggingFaceRepo,
+				"size":             entry.SizeHuman,
+				"sizeBytes":        entry.SizeBytes,
+				"parameters":       entry.ParameterSize,
+				"quantization":     entry.Quantization,
+				"category":         entry.Category,
+				"downloadUrl":      fmt.Sprintf("https://huggingface.co/%s/resolve/main/%s", entry.HuggingFaceRepo, entry.Filename),
+				"ggufFile":         entry.Filename,
+				"license":          entry.License,
+				"languages":        entry.Languages,
+				"useCases":         entry.UseCases,
+				"minRamGB":         entry.MinRamGB,
 				"recommendedRamGB": entry.RecommendedRamGB,
 			})
 			return
 		}
 	}
 
-	http.Error(w, "Model not found", http.StatusNotFound)
+	// 2. Nicht in Registry - Details von HuggingFace API holen
+	log.Printf("Model %s nicht in Registry, hole Details von HuggingFace API...", modelId)
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	// WICHTIG: modelId NICHT URL-kodieren, da der Schrägstrich Teil des Pfads ist
+	hfURL := fmt.Sprintf("https://huggingface.co/api/models/%s", modelId)
+
+	resp, err := client.Get(hfURL)
+	if err != nil {
+		log.Printf("HuggingFace API Fehler: %v", err)
+		http.Error(w, "Failed to fetch model details from HuggingFace", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		http.Error(w, "Model not found on HuggingFace", http.StatusNotFound)
+		return
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		http.Error(w, "HuggingFace API error", http.StatusBadGateway)
+		return
+	}
+
+	var hfModel struct {
+		ID           string   `json:"id"`
+		ModelID      string   `json:"modelId"`
+		Author       string   `json:"author"`
+		Downloads    int      `json:"downloads"`
+		Likes        int      `json:"likes"`
+		Tags         []string `json:"tags"`
+		CardData     struct {
+			License   string   `json:"license"`
+			Languages []string `json:"language"`
+		} `json:"cardData"`
+		Siblings []struct {
+			RFilename string `json:"rfilename"`
+		} `json:"siblings"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&hfModel); err != nil {
+		log.Printf("HuggingFace JSON Parse Fehler: %v", err)
+		http.Error(w, "Failed to parse HuggingFace response", http.StatusBadGateway)
+		return
+	}
+
+	// GGUF-Dateien finden
+	var ggufFiles []map[string]interface{}
+	var siblings []string // Für Frontend-Kompatibilität (erwartet Array von Dateinamen)
+	for _, sibling := range hfModel.Siblings {
+		if strings.HasSuffix(strings.ToLower(sibling.RFilename), ".gguf") {
+			// Größe und Quantisierung aus Dateiname ableiten
+			sizeBytes, sizeHuman := estimateGGUFSize(sibling.RFilename)
+			quant := extractQuantization(sibling.RFilename)
+
+			ggufFiles = append(ggufFiles, map[string]interface{}{
+				"filename":     sibling.RFilename,
+				"downloadUrl":  fmt.Sprintf("https://huggingface.co/%s/resolve/main/%s", modelId, sibling.RFilename),
+				"sizeBytes":    sizeBytes,
+				"sizeHuman":    sizeHuman,
+				"quantization": quant,
+			})
+			siblings = append(siblings, sibling.RFilename)
+		}
+	}
+
+	// Parameter-Größe und Kategorie ermitteln
+	paramSize := extractParamSizeFromTags(modelId, hfModel.Tags)
+	category := detectCategoryFromTags(hfModel.Tags)
+
+	// Empfohlene GGUF-Datei wählen (Q4_K_M bevorzugt)
+	var recommendedFile, recommendedQuant string
+	var recommendedSize int64
+	var recommendedSizeHuman string
+	for _, f := range ggufFiles {
+		fname := strings.ToLower(f["filename"].(string))
+		if strings.Contains(fname, "q4_k_m") || strings.Contains(fname, "q4_k") {
+			recommendedFile = f["filename"].(string)
+			recommendedQuant = f["quantization"].(string)
+			recommendedSize = f["sizeBytes"].(int64)
+			recommendedSizeHuman = f["sizeHuman"].(string)
+			break
+		}
+	}
+	if recommendedFile == "" && len(ggufFiles) > 0 {
+		// Fallback: Erste GGUF-Datei
+		recommendedFile = ggufFiles[0]["filename"].(string)
+		recommendedQuant = ggufFiles[0]["quantization"].(string)
+		recommendedSize = ggufFiles[0]["sizeBytes"].(int64)
+		recommendedSizeHuman = ggufFiles[0]["sizeHuman"].(string)
+	}
+
+	writeJSON(w, map[string]interface{}{
+		"name":          hfModel.ID,
+		"description":   fmt.Sprintf("GGUF model from %s with %d downloads", hfModel.Author, hfModel.Downloads),
+		"huggingFaceId": hfModel.ID,
+		"author":        hfModel.Author,
+		"downloads":     hfModel.Downloads,
+		"likes":         hfModel.Likes,
+		"size":          recommendedSizeHuman,
+		"sizeBytes":     recommendedSize,
+		"parameters":    paramSize,
+		"quantization":  recommendedQuant,
+		"category":      category,
+		"downloadUrl":   fmt.Sprintf("https://huggingface.co/%s/resolve/main/%s", modelId, recommendedFile),
+		"ggufFile":      recommendedFile,
+		"ggufFiles":     ggufFiles,
+		"siblings":      siblings, // Frontend-Kompatibilität: Array von Dateinamen
+		"license":       hfModel.CardData.License,
+		"languages":     hfModel.CardData.Languages,
+		"tags":          hfModel.Tags,
+		"source":        "huggingface",
+	})
+}
+
+// estimateGGUFSize schätzt die Größe einer GGUF-Datei basierend auf dem Dateinamen
+func estimateGGUFSize(filename string) (int64, string) {
+	nameLower := strings.ToLower(filename)
+
+	// Parameter-Größe extrahieren
+	var params float64
+	patterns := []struct {
+		pattern string
+		size    float64
+	}{
+		{"70b", 70}, {"72b", 72}, {"65b", 65}, {"34b", 34}, {"33b", 33},
+		{"32b", 32}, {"30b", 30}, {"14b", 14}, {"13b", 13}, {"9b", 9},
+		{"8b", 8}, {"7b", 7}, {"3b", 3}, {"2b", 2}, {"1.5b", 1.5}, {"1b", 1},
+	}
+
+	for _, p := range patterns {
+		if strings.Contains(nameLower, p.pattern) {
+			params = p.size
+			break
+		}
+	}
+
+	if params == 0 {
+		return 0, ""
+	}
+
+	// Quantisierung -> Bytes pro Parameter
+	var bytesPerParam float64
+	switch {
+	case strings.Contains(nameLower, "q2"):
+		bytesPerParam = 0.35
+	case strings.Contains(nameLower, "q3"):
+		bytesPerParam = 0.45
+	case strings.Contains(nameLower, "q4"), strings.Contains(nameLower, "iq4"):
+		bytesPerParam = 0.55
+	case strings.Contains(nameLower, "q5"):
+		bytesPerParam = 0.65
+	case strings.Contains(nameLower, "q6"):
+		bytesPerParam = 0.75
+	case strings.Contains(nameLower, "q8"):
+		bytesPerParam = 1.0
+	case strings.Contains(nameLower, "f16"):
+		bytesPerParam = 2.0
+	default:
+		bytesPerParam = 0.55
+	}
+
+	sizeBytes := int64(params * 1e9 * bytesPerParam)
+	sizeGB := float64(sizeBytes) / (1024 * 1024 * 1024)
+	sizeHuman := fmt.Sprintf("~%.1f GB", sizeGB)
+
+	return sizeBytes, sizeHuman
+}
+
+// extractQuantization extrahiert die Quantisierung aus dem Dateinamen
+func extractQuantization(filename string) string {
+	nameLower := strings.ToLower(filename)
+	patterns := []string{
+		"Q8_0", "Q6_K_L", "Q6_K",
+		"Q5_K_M", "Q5_K_S", "Q5_K_L", "Q5_0",
+		"Q4_K_M", "Q4_K_S", "Q4_K_L", "Q4_0", "IQ4_XS", "IQ4_NL",
+		"Q3_K_M", "Q3_K_S", "Q3_K_L", "Q2_K",
+		"F16", "F32",
+	}
+
+	for _, p := range patterns {
+		if strings.Contains(nameLower, strings.ToLower(p)) {
+			return p
+		}
+	}
+	return ""
+}
+
+// extractParamSizeFromTags extrahiert die Parameter-Größe aus Name oder Tags
+func extractParamSizeFromTags(modelName string, tags []string) string {
+	patterns := []string{"70B", "72B", "65B", "34B", "33B", "32B", "30B", "14B", "13B", "9B", "8B", "7B", "3B", "2B", "1.5B", "1B"}
+
+	modelUpper := strings.ToUpper(modelName)
+	for _, p := range patterns {
+		if strings.Contains(modelUpper, p) || strings.Contains(modelUpper, "-"+p) {
+			return p
+		}
+	}
+
+	for _, tag := range tags {
+		tagUpper := strings.ToUpper(tag)
+		for _, p := range patterns {
+			if tagUpper == p || strings.HasSuffix(tagUpper, p) {
+				return p
+			}
+		}
+	}
+
+	return ""
+}
+
+// detectCategoryFromTags ermittelt die Kategorie aus den Tags
+func detectCategoryFromTags(tags []string) string {
+	for _, tag := range tags {
+		tagLower := strings.ToLower(tag)
+		if strings.Contains(tagLower, "code") || strings.Contains(tagLower, "coder") {
+			return "code"
+		}
+		if strings.Contains(tagLower, "vision") || strings.Contains(tagLower, "llava") || strings.Contains(tagLower, "multimodal") {
+			return "vision"
+		}
+	}
+	return "chat"
 }
 
 // handleHuggingFaceDownload lädt ein GGUF-Modell von HuggingFace herunter
 func (app *App) handleHuggingFaceDownload(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
+	var downloadURL, filename string
+
+	switch r.Method {
+	case http.MethodGet:
+		// GET mit Query-Parametern (für EventSource/SSE)
+		modelId := r.URL.Query().Get("modelId")
+		filename = r.URL.Query().Get("filename")
+
+		if modelId == "" || filename == "" {
+			http.Error(w, "modelId und filename Query-Parameter erforderlich", http.StatusBadRequest)
+			return
+		}
+
+		// Download-URL aus modelId und filename konstruieren
+		downloadURL = fmt.Sprintf("https://huggingface.co/%s/resolve/main/%s", modelId, filename)
+		log.Printf("[HuggingFace] GET Download: modelId=%s, filename=%s", modelId, filename)
+
+	case http.MethodPost:
+		// POST mit JSON-Body
+		var req struct {
+			URL      string `json:"url"`
+			Filename string `json:"filename"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		if req.URL == "" || req.Filename == "" {
+			http.Error(w, "url und filename erforderlich", http.StatusBadRequest)
+			return
+		}
+
+		downloadURL = req.URL
+		filename = req.Filename
+		log.Printf("[HuggingFace] POST Download: url=%s, filename=%s", downloadURL, filename)
+
+	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var req struct {
-		URL      string `json:"url"`
-		Filename string `json:"filename"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	// Weiterleitung an llama-server Download
-	app.handleLlamaServerDownload(w, r)
+	// Download starten mit SSE
+	app.downloadGGUFModel(w, downloadURL, filename)
 }
 
 // handleOllamaPull zieht ein Modell via Ollama
@@ -9872,6 +10455,91 @@ func addFileToZip(zipWriter *zip.Writer, filename, content string) error {
 		return fmt.Errorf("ZIP-Eintrag %s schreiben: %w", filename, err)
 	}
 	return nil
+}
+
+// isIdentityOrPersonalQuestion prüft ob eine Nachricht eine Identitäts- oder persönliche Frage ist
+// Bei solchen Fragen sollte KEINE Web-Suche durchgeführt werden, da sie irrelevante Ergebnisse liefert
+func isIdentityOrPersonalQuestion(message string) bool {
+	msg := strings.ToLower(message)
+
+	// Identitätsfragen (Wer bist du?, Was bist du?, etc.)
+	identityPatterns := []string{
+		"wer bist du",
+		"wer sind sie",
+		"was bist du",
+		"was sind sie",
+		"wer bin ich", // Könnte auch gemeint sein
+		"stell dich vor",
+		"stelle dich vor",
+		"erzähl mir von dir",
+		"erzähle mir von dir",
+		"beschreib dich",
+		"beschreibe dich",
+		"wie heißt du",
+		"wie heissen sie",
+		"who are you",
+		"what are you",
+		"introduce yourself",
+		"tell me about yourself",
+		"sen kimsin", // Türkisch: Wer bist du?
+		"siz kimsiniz",
+		"kendini tanıt",
+	}
+
+	// Persönliche Fragen (Wie geht es dir?, etc.)
+	personalPatterns := []string{
+		"wie geht es dir",
+		"wie geht's dir",
+		"wie gehts dir",
+		"wie geht es ihnen",
+		"geht es dir gut",
+		"alles gut bei dir",
+		"how are you",
+		"how do you feel",
+		"nasılsın", // Türkisch: Wie geht es dir?
+		"nasıl gidiyor",
+	}
+
+	// Technische Selbstfragen (Welches Modell?, Auf was basierst du?, etc.)
+	technicalSelfPatterns := []string{
+		"welches modell",
+		"welchem modell",
+		"was für ein modell",
+		"auf welchem modell",
+		"basierst du",
+		"bist du aufgebaut",
+		"worauf basierst",
+		"welche ki",
+		"welches llm",
+		"what model",
+		"which model",
+		"based on",
+		"built on",
+		"hangi model", // Türkisch
+		"ne modeli",
+		"du läufst",    // "du läufst auf CPU/GPU"
+		"läufst du auf",
+		"runnst du",
+	}
+
+	// Alle Patterns prüfen
+	for _, pattern := range identityPatterns {
+		if strings.Contains(msg, pattern) {
+			return true
+		}
+	}
+	for _, pattern := range personalPatterns {
+		if strings.Contains(msg, pattern) {
+			return true
+		}
+	}
+	for _, pattern := range technicalSelfPatterns {
+		if strings.Contains(msg, pattern) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // optimizeSearchQuery verwendet das LLM um eine bessere Suchanfrage zu generieren

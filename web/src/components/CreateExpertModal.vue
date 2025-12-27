@@ -491,6 +491,7 @@ import { XMarkIcon, ChevronDownIcon, PlusIcon, TrashIcon, EyeIcon, DocumentArrow
 import axios from 'axios'
 import api from '../services/api'
 import { useChatStore } from '../stores/chatStore'
+import { useStreamingStore } from '../stores/streamingStore'
 import { useToast } from '../composables/useToast'
 import { useConfirmDialog } from '../composables/useConfirmDialog'
 import { secureFetch } from '../utils/secureFetch'
@@ -519,6 +520,7 @@ watch(() => props.show, (isShown) => {
 })
 const { success, error } = useToast()
 const chatStore = useChatStore()
+const streamingStore = useStreamingStore()
 
 const form = ref({
   name: '',
@@ -955,7 +957,7 @@ async function save() {
       success(t('createExpertModal.toast.expertCreated', { name: form.value.name }))
     }
 
-    // Wenn dieser Experte gerade aktiv ist, Context sofort aktualisieren
+    // Wenn dieser Experte gerade aktiv ist, Context und Model sofort aktualisieren
     if (savedExpertId && chatStore.selectedExpertId === savedExpertId) {
       const newContext = form.value.defaultNumCtx || 65536
       try {
@@ -967,6 +969,36 @@ async function save() {
         chatStore.contextUsage.maxContextTokens = newContext
       } catch (ctxErr) {
         console.warn('Context-Update fehlgeschlagen:', ctxErr)
+      }
+
+      // Model-Switch wenn Modell geändert wurde
+      const newModel = form.value.baseModel
+      if (newModel && newModel !== props.expert?.model) {
+        console.log(`🔄 Experten-Modell geändert: ${props.expert?.model} → ${newModel}`)
+        try {
+          await api.switchModel(newModel, (progress) => {
+            // Update streamingStore für Animation
+            if (progress.status === 'starting') {
+              streamingStore.isSwappingModel = true
+              streamingStore.modelSwapMessage = progress.message
+              streamingStore.modelSwapProgress = 10
+            } else if (progress.status === 'complete') {
+              streamingStore.modelSwapProgress = 100
+              streamingStore.modelSwapMessage = progress.message
+              setTimeout(() => {
+                streamingStore.isSwappingModel = false
+                streamingStore.modelSwapMessage = ''
+                streamingStore.modelSwapProgress = 0
+              }, 1000)
+            } else if (progress.status === 'error') {
+              streamingStore.isSwappingModel = false
+              streamingStore.modelSwapMessage = ''
+              streamingStore.modelSwapProgress = 0
+            }
+          })
+        } catch (modelErr) {
+          console.warn('Model-Switch fehlgeschlagen:', modelErr)
+        }
       }
     }
 

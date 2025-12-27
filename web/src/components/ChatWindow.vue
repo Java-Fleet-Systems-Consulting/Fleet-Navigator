@@ -97,8 +97,8 @@
             </div>
           </div>
           <!-- Message -->
-          <h3 class="text-lg font-semibold text-white mb-2">Vision-Modell wird geladen</h3>
-          <p class="text-purple-300 text-sm">{{ chatStore.modelSwapMessage || 'Wechsle zum Bildanalyse-Modell...' }}</p>
+          <h3 class="text-lg font-semibold text-white mb-2">Modell wird geladen</h3>
+          <p class="text-purple-300 text-sm">{{ chatStore.modelSwapMessage || 'Wechsle zum passenden Modell...' }}</p>
           <!-- Progress bar -->
           <div class="mt-4 w-full bg-gray-700 rounded-full h-2">
             <div
@@ -106,7 +106,7 @@
               :style="{ width: chatStore.modelSwapProgress + '%' }"
             ></div>
           </div>
-          <p class="text-gray-500 text-xs mt-3">VRAM-Optimierung für GPUs mit begrenztem Speicher</p>
+          <p class="text-gray-500 text-xs mt-3">Modell-Wechsel für optimale Antworten</p>
         </div>
       </div>
     </Transition>

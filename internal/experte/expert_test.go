@@ -18,8 +18,8 @@ func TestDefaultAntiHallucinationPromptExists(t *testing.T) {
 		"nicht weisst",
 		"Unterscheide KLAR",
 		"Lieber zugeben",
-		"IDENTITÄT",     // Neu: Identitäts-Schutz
-		"QUELLEN",       // Neu: Quellen-Relevanz
+		"SELBSTWAHRNEHMUNG", // Selbstwahrnehmungs-Schutz (was LLM über sich weiß)
+		"QUELLEN",          // Quellen-Relevanz
 	}
 
 	for _, phrase := range requiredPhrases {

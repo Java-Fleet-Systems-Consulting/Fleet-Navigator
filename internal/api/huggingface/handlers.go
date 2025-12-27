@@ -278,19 +278,48 @@ func (h *Handlers) handleDetails(w http.ResponseWriter, r *http.Request) {
 	common.WriteNotFound(w, "Model not found")
 }
 
-// handleDownload - POST /api/huggingface/download
+// handleDownload - GET/POST /api/huggingface/download
+// GET: Query-Parameter modelId und filename (für EventSource/SSE)
+// POST: JSON-Body mit url und filename
 func (h *Handlers) handleDownload(w http.ResponseWriter, r *http.Request) {
-	if !common.RequirePOST(w, r) {
-		return
-	}
+	var downloadURL, filename string
 
-	var req struct {
-		URL      string `json:"url"`
-		Filename string `json:"filename"`
-	}
+	switch r.Method {
+	case http.MethodGet:
+		// GET mit Query-Parametern (für EventSource/SSE)
+		modelId := r.URL.Query().Get("modelId")
+		filename = r.URL.Query().Get("filename")
 
-	if err := common.DecodeJSON(r, &req); err != nil {
-		common.WriteBadRequest(w, "Invalid request body")
+		if modelId == "" || filename == "" {
+			common.WriteBadRequest(w, "modelId und filename Query-Parameter erforderlich")
+			return
+		}
+
+		// Download-URL aus modelId und filename konstruieren
+		downloadURL = fmt.Sprintf("https://huggingface.co/%s/resolve/main/%s", modelId, filename)
+
+	case http.MethodPost:
+		// POST mit JSON-Body
+		var req struct {
+			URL      string `json:"url"`
+			Filename string `json:"filename"`
+		}
+
+		if err := common.DecodeJSON(r, &req); err != nil {
+			common.WriteBadRequest(w, "Invalid request body")
+			return
+		}
+
+		if req.URL == "" || req.Filename == "" {
+			common.WriteBadRequest(w, "url und filename erforderlich")
+			return
+		}
+
+		downloadURL = req.URL
+		filename = req.Filename
+
+	default:
+		common.WriteMethodNotAllowed(w)
 		return
 	}
 
@@ -299,7 +328,7 @@ func (h *Handlers) handleDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.downloader.DownloadModelFromURL(w, req.URL, req.Filename)
+	h.downloader.DownloadModelFromURL(w, downloadURL, filename)
 }
 
 // --- Helper Functions ---

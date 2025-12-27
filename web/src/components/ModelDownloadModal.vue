@@ -101,8 +101,8 @@
 
         </div>
 
-        <!-- Learn While You Wait - Contextual Help Links -->
-        <div v-if="helpTopics.length > 0" class="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border-t border-indigo-100 dark:border-indigo-800 px-8 py-5">
+        <!-- Learn While You Wait - Contextual Help Links (nur im Setup-Wizard) -->
+        <div v-if="showHelpLinks && helpTopics.length > 0" class="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border-t border-indigo-100 dark:border-indigo-800 px-8 py-5">
           <div class="flex items-center gap-2 mb-3">
             <span class="text-lg">💡</span>
             <span class="font-semibold text-indigo-900 dark:text-indigo-100">
@@ -185,6 +185,10 @@ const props = defineProps({
     type: String,
     default: 'llm',
     validator: (value) => ['llm', 'llama-server', 'vision', 'whisper', 'piper'].includes(value)
+  },
+  showHelpLinks: {
+    type: Boolean,
+    default: false  // Nur im Setup-Wizard anzeigen
   }
 })
 

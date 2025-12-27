@@ -1755,11 +1755,29 @@ func (d *HuggingFaceDownloader) downloadModelSingle(url, destPath, modelID strin
 
 	totalSize, _ := strconv.ParseInt(resp.Header.Get("Content-Length"), 10, 64)
 
+	// Meta-Datei mit erwarteter Größe erstellen (für Cleanup bei Abbruch)
+	metaPath := destPath + ".meta"
+	if err := os.WriteFile(metaPath, []byte(fmt.Sprintf("%d", totalSize)), 0644); err != nil {
+		log.Printf("[Setup] ⚠️ Meta-Datei konnte nicht erstellt werden: %v", err)
+	}
+
 	out, err := os.Create(destPath)
 	if err != nil {
+		os.Remove(metaPath) // Meta-Datei aufräumen
 		return fmt.Errorf("Datei erstellen: %w", err)
 	}
 	defer out.Close()
+
+	// Bei Fehler: Datei und Meta-Datei löschen
+	downloadSuccess := false
+	defer func() {
+		if !downloadSuccess {
+			log.Printf("[Setup] 🗑️ Unvollständiger Download wird gelöscht: %s", destPath)
+			out.Close()
+			os.Remove(destPath)
+			os.Remove(metaPath)
+		}
+	}()
 
 	var downloaded int64
 	buf := make([]byte, 1024*1024) // 1MB Buffer
@@ -1811,6 +1829,11 @@ func (d *HuggingFaceDownloader) downloadModelSingle(url, destPath, modelID strin
 		}
 	}
 
+	// Download erfolgreich - Meta-Datei löschen
+	downloadSuccess = true
+	os.Remove(metaPath)
+	log.Printf("[Setup] ✅ Download vollständig: %s (%d Bytes)", destPath, downloaded)
+
 	return nil
 }
 
@@ -1826,6 +1849,12 @@ func (e *SlowDownloadError) Error() string {
 // downloadModelMulti - Multi-Connection Download für große Dateien
 func (d *HuggingFaceDownloader) downloadModelMulti(url, destPath, modelID string, totalSize int64, numConnections int, progressCh chan<- SetupProgress, lang string) error {
 	chunkSize := totalSize / int64(numConnections)
+
+	// Meta-Datei mit erwarteter Größe erstellen (für Cleanup bei Abbruch)
+	metaPath := destPath + ".meta"
+	if err := os.WriteFile(metaPath, []byte(fmt.Sprintf("%d", totalSize)), 0644); err != nil {
+		log.Printf("[Setup] ⚠️ Meta-Datei konnte nicht erstellt werden: %v", err)
+	}
 
 	// Temporäre Dateien für jeden Chunk
 	tempFiles := make([]string, numConnections)
@@ -1983,6 +2012,10 @@ func (d *HuggingFaceDownloader) downloadModelMulti(url, destPath, modelID string
 	avgSpeed := float64(totalSize) / elapsed / (1024 * 1024)
 	log.Printf("[Setup] Multi-Connection Download abgeschlossen: %.1f MB in %.1fs (%.1f MB/s)",
 		float64(totalSize)/(1024*1024), elapsed, avgSpeed)
+
+	// Download erfolgreich - Meta-Datei löschen
+	os.Remove(metaPath)
+	log.Printf("[Setup] ✅ Download vollständig: %s", destPath)
 
 	return nil
 }

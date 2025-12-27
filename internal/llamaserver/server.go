@@ -97,6 +97,8 @@ type Server struct {
 	heartbeatCancel context.CancelFunc // Stoppt den Heartbeat-Monitor
 	navigatorPort   int                // Port des Fleet Navigators für Heartbeat
 	templateAdapter TemplateAdapter    // Für Model-Template-Adaption
+	watchdog        *Watchdog          // Watchdog für Auto-Restart
+	watchdogEnabled bool               // Watchdog aktiviert?
 }
 
 // NewServer erstellt einen neuen Server-Manager
@@ -205,6 +207,72 @@ func findLlamaServerBinary() string {
 	}
 
 	return ""
+}
+
+// CleanupIncompleteDownloads entfernt unvollständige Downloads beim Start
+// Prüft .meta Dateien und löscht unvollständige .gguf Dateien
+func (s *Server) CleanupIncompleteDownloads() int {
+	if s.config.ModelsDir == "" {
+		return 0
+	}
+
+	cleaned := 0
+
+	// 1. Prüfe .meta Dateien (von abgebrochenen Downloads)
+	metaFiles, _ := filepath.Glob(filepath.Join(s.config.ModelsDir, "*.meta"))
+	for _, metaPath := range metaFiles {
+		ggufPath := strings.TrimSuffix(metaPath, ".meta")
+
+		// Erwartete Größe aus Meta-Datei lesen
+		metaContent, err := os.ReadFile(metaPath)
+		if err != nil {
+			os.Remove(metaPath)
+			continue
+		}
+
+		expectedSize, err := strconv.ParseInt(strings.TrimSpace(string(metaContent)), 10, 64)
+		if err != nil {
+			os.Remove(metaPath)
+			continue
+		}
+
+		// Prüfen ob .gguf existiert und vollständig ist
+		info, err := os.Stat(ggufPath)
+		if err != nil {
+			// .gguf existiert nicht - Meta-Datei löschen
+			os.Remove(metaPath)
+			continue
+		}
+
+		// Toleranz: 99% der erwarteten Größe (für Rundungsfehler)
+		minSize := int64(float64(expectedSize) * 0.99)
+		if info.Size() < minSize {
+			log.Printf("🗑️ Unvollständiger Download gelöscht: %s (%.1f MB von %.1f MB)",
+				filepath.Base(ggufPath),
+				float64(info.Size())/1024/1024,
+				float64(expectedSize)/1024/1024)
+			os.Remove(ggufPath)
+			os.Remove(metaPath)
+			cleaned++
+		} else {
+			// Download ist vollständig - nur Meta-Datei löschen
+			os.Remove(metaPath)
+		}
+	}
+
+	// 2. Lösche .part* Dateien (Multi-Connection Fragmente)
+	partFiles, _ := filepath.Glob(filepath.Join(s.config.ModelsDir, "*.part*"))
+	for _, partPath := range partFiles {
+		log.Printf("🗑️ Download-Fragment gelöscht: %s", filepath.Base(partPath))
+		os.Remove(partPath)
+		cleaned++
+	}
+
+	if cleaned > 0 {
+		log.Printf("✅ %d unvollständige Downloads bereinigt", cleaned)
+	}
+
+	return cleaned
 }
 
 // GetAvailableModels gibt alle verfügbaren GGUF-Modelle zurück
@@ -777,7 +845,185 @@ func (s *Server) SwitchModel(modelPath string) error {
 
 	time.Sleep(2 * time.Second)
 
-	return s.Start(modelPath)
+	// Context-Größe automatisch anpassen wenn nötig
+	maxContext := GetModelMaxContext(modelPath)
+	if s.config.ContextSize > maxContext {
+		log.Printf("Context-Anpassung: %d → %d (Modell-Maximum)", s.config.ContextSize, maxContext)
+		s.config.ContextSize = maxContext
+	}
+
+	if err := s.Start(modelPath); err != nil {
+		return err
+	}
+
+	// WICHTIG: Warten bis Server wirklich bereit ist (behebt Race-Condition)
+	return s.WaitForHealthy(30 * time.Second)
+}
+
+// WaitForHealthy wartet bis der Server auf Health-Checks antwortet
+func (s *Server) WaitForHealthy(timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+
+	for time.Now().Before(deadline) {
+		if s.IsHealthy() {
+			log.Printf("llama-server ist bereit (nach WaitForHealthy)")
+			return nil
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	return fmt.Errorf("llama-server nicht bereit nach %v", timeout)
+}
+
+// GetModelMaxContext gibt den maximalen Context für ein Modell zurück
+func GetModelMaxContext(modelPath string) int {
+	modelName := strings.ToLower(filepath.Base(modelPath))
+
+	// Bekannte Modelle mit kleineren Context-Limits
+	switch {
+	case strings.Contains(modelName, "gemma-2"):
+		return 8192 // Gemma 2 hat 8K Context
+	case strings.Contains(modelName, "gemma"):
+		return 8192
+	case strings.Contains(modelName, "phi-3") || strings.Contains(modelName, "phi3"):
+		return 4096 // Phi-3 Mini hat 4K
+	case strings.Contains(modelName, "mistral-7b"):
+		return 32768 // Mistral 7B hat 32K
+	case strings.Contains(modelName, "llama-3.1") || strings.Contains(modelName, "llama3.1"):
+		return 131072 // Llama 3.1 hat 128K
+	case strings.Contains(modelName, "llama-3") || strings.Contains(modelName, "llama3"):
+		return 8192 // Llama 3 hat 8K
+	case strings.Contains(modelName, "qwen2.5") || strings.Contains(modelName, "qwen-2.5"):
+		return 32768 // Qwen 2.5 hat 32K (bis 128K für größere)
+	case strings.Contains(modelName, "deepseek"):
+		return 32768
+	default:
+		return 16384 // Sicherer Default
+	}
+}
+
+// FindModelByName sucht ein Modell nach Namen und gibt den Pfad zurück
+func (s *Server) FindModelByName(modelName string) (string, error) {
+	models, err := s.GetAvailableModels()
+	if err != nil {
+		return "", err
+	}
+
+	modelNameLower := strings.ToLower(modelName)
+
+	// Exakter Match (case-insensitive)
+	for _, m := range models {
+		if strings.ToLower(m.Name) == modelNameLower {
+			return m.Path, nil
+		}
+	}
+
+	// Partieller Match (Modellname enthält den Suchbegriff)
+	for _, m := range models {
+		if strings.Contains(strings.ToLower(m.Name), modelNameLower) {
+			return m.Path, nil
+		}
+	}
+
+	// Fuzzy-Match: Suche nach Schlüsselwörtern (z.B. "llama 3.1 8b" -> "llama", "3.1", "8b")
+	keywords := strings.Fields(modelNameLower)
+	for _, m := range models {
+		mLower := strings.ToLower(m.Name)
+		matchCount := 0
+		for _, kw := range keywords {
+			if len(kw) > 2 && strings.Contains(mLower, kw) {
+				matchCount++
+			}
+		}
+		// Mindestens 2 Keywords müssen matchen
+		if matchCount >= 2 {
+			log.Printf("Fuzzy-Match für '%s': %s (%d Keywords)", modelName, m.Name, matchCount)
+			return m.Path, nil
+		}
+	}
+
+	return "", fmt.Errorf("Modell '%s' nicht gefunden", modelName)
+}
+
+// GetLargestModel gibt das größte verfügbare Modell zurück (Fallback)
+func (s *Server) GetLargestModel() (string, string, error) {
+	models, err := s.GetAvailableModels()
+	if err != nil {
+		return "", "", err
+	}
+
+	if len(models) == 0 {
+		return "", "", fmt.Errorf("keine Modelle verfügbar")
+	}
+
+	// Finde das größte Modell (nach Dateigröße)
+	var largest ModelInfo
+	for _, m := range models {
+		if m.Size > largest.Size {
+			largest = m
+		}
+	}
+
+	return largest.Path, largest.Name, nil
+}
+
+// SwitchToModelIfNeeded wechselt zum Modell nur wenn nötig (anderes Modell geladen)
+// Gibt (switched, usedFallback, actualModelName, error) zurück
+func (s *Server) SwitchToModelIfNeeded(modelName string) (bool, error) {
+	switched, _, _, err := s.SwitchToModelWithFallback(modelName)
+	return switched, err
+}
+
+// SwitchToModelWithFallback wechselt zum Modell mit Fallback auf größtes Modell
+// Gibt (switched, usedFallback, actualModelName, error) zurück
+func (s *Server) SwitchToModelWithFallback(modelName string) (bool, bool, string, error) {
+	if modelName == "" {
+		return false, false, "", nil
+	}
+
+	status := s.GetStatus()
+	currentModel := strings.ToLower(status.ModelName)
+	targetModel := strings.ToLower(modelName)
+
+	// Wenn bereits das richtige Modell geladen ist
+	if currentModel == targetModel || strings.Contains(currentModel, targetModel) || strings.Contains(targetModel, currentModel) {
+		return false, false, status.ModelName, nil
+	}
+
+	// Modellpfad suchen
+	modelPath, err := s.FindModelByName(modelName)
+	usedFallback := false
+	actualModelName := modelName
+
+	if err != nil {
+		// Modell nicht gefunden - Fallback auf größtes verfügbares Modell
+		log.Printf("⚠️ Modell '%s' nicht gefunden - verwende Fallback", modelName)
+
+		fallbackPath, fallbackName, fallbackErr := s.GetLargestModel()
+		if fallbackErr != nil {
+			return false, false, "", fmt.Errorf("Modell '%s' nicht gefunden und kein Fallback verfügbar: %v", modelName, fallbackErr)
+		}
+
+		// Prüfen ob Fallback bereits geladen ist
+		if strings.Contains(strings.ToLower(fallbackName), currentModel) || strings.Contains(currentModel, strings.ToLower(fallbackName)) {
+			log.Printf("Fallback-Modell '%s' ist bereits geladen", fallbackName)
+			return false, true, fallbackName, nil
+		}
+
+		modelPath = fallbackPath
+		actualModelName = fallbackName
+		usedFallback = true
+		log.Printf("🔄 Fallback: Lade größtes Modell '%s' statt '%s'", fallbackName, modelName)
+	}
+
+	log.Printf("Model-Switch: %s -> %s", status.ModelName, actualModelName)
+
+	// Modell wechseln
+	if err := s.SwitchModel(modelPath); err != nil {
+		return false, usedFallback, "", fmt.Errorf("Modell-Wechsel fehlgeschlagen: %v", err)
+	}
+
+	return true, usedFallback, actualModelName, nil
 }
 
 // ModelInfo enthält Informationen über ein GGUF-Modell
@@ -2176,4 +2422,75 @@ func GetRecommendedVisionModels() []RecommendedModel {
 			Category:    "vision",
 		},
 	}
+}
+
+// ==================== WATCHDOG METHODS ====================
+
+// EnableWatchdog aktiviert den Watchdog mit Standard-Konfiguration
+func (s *Server) EnableWatchdog() error {
+	return s.EnableWatchdogWithConfig(DefaultWatchdogConfig(s.config.Port))
+}
+
+// EnableWatchdogWithConfig aktiviert den Watchdog mit Custom-Konfiguration
+func (s *Server) EnableWatchdogWithConfig(config WatchdogConfig) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.watchdog != nil && s.watchdog.IsRunning() {
+		return fmt.Errorf("Watchdog läuft bereits")
+	}
+
+	s.watchdog = NewWatchdog(s, config)
+	s.watchdogEnabled = true
+
+	// Callback für Logging
+	s.watchdog.SetRestartCallback(func(reason string, attempt int) {
+		log.Printf("🐕 Watchdog-Restart #%d: %s", attempt, reason)
+	})
+
+	return s.watchdog.Start()
+}
+
+// DisableWatchdog deaktiviert den Watchdog
+func (s *Server) DisableWatchdog() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.watchdog != nil {
+		s.watchdog.Stop()
+	}
+	s.watchdogEnabled = false
+}
+
+// IsWatchdogEnabled prüft ob der Watchdog aktiviert ist
+func (s *Server) IsWatchdogEnabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.watchdogEnabled && s.watchdog != nil && s.watchdog.IsRunning()
+}
+
+// GetWatchdogStats gibt die Watchdog-Statistiken zurück
+func (s *Server) GetWatchdogStats() *WatchdogStats {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.watchdog == nil {
+		return nil
+	}
+
+	stats := s.watchdog.GetStats()
+	return &stats
+}
+
+// ForceWatchdogRestart erzwingt einen Neustart über den Watchdog
+func (s *Server) ForceWatchdogRestart(reason string) error {
+	s.mu.RLock()
+	watchdog := s.watchdog
+	s.mu.RUnlock()
+
+	if watchdog == nil {
+		return fmt.Errorf("Watchdog nicht aktiviert")
+	}
+
+	return watchdog.ForceRestart(reason)
 }

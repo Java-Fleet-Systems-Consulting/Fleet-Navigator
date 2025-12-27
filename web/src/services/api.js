@@ -191,6 +191,42 @@ export default {
     })
   },
 
+  /**
+   * Wechselt das aktive LLM-Modell (SSE für Fortschritt)
+   * @param {string} modelName - Name des Modells
+   * @param {Function} onProgress - Callback für Fortschritt {type, status, message, model}
+   * @returns {Promise} Resolved wenn Wechsel abgeschlossen
+   */
+  async switchModel(modelName, onProgress) {
+    return new Promise((resolve, reject) => {
+      const eventSource = new EventSource(`/api/llm/switch-model?model=${encodeURIComponent(modelName)}`)
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          if (onProgress) onProgress(data)
+
+          // Bei complete oder error schließen
+          if (data.status === 'complete' || data.status === 'error') {
+            eventSource.close()
+            if (data.status === 'error') {
+              reject(new Error(data.message))
+            } else {
+              resolve(data)
+            }
+          }
+        } catch (e) {
+          console.error('Failed to parse model switch event:', e)
+        }
+      }
+
+      eventSource.onerror = (err) => {
+        eventSource.close()
+        reject(new Error('Model switch connection failed'))
+      }
+    })
+  },
+
   // Stats endpoints
   async getGlobalStats() {
     const response = await api.get('/stats/global')
