@@ -4,7 +4,7 @@
 
 **Repository:** `Java-Fleet-Systems-Consulting/Fleet-Navigator`
 **SSH-Host:** `github-kofi`
-**Committer:** Kofi Mensah <kofi.mensah@java-developer.online>
+**Committer:** Kofi Mensah <kofi.mensah@Java-fleet.com>
 
 ```bash
 # Remote-URL Format:
