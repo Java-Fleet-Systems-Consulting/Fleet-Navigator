@@ -116,7 +116,10 @@
     "download": "Herunterladen",
     "upload": "Hochladen",
     "install": "Installieren",
+    "installed": "Installiert",
+    "notInstalled": "Nicht installiert",
     "uninstall": "Deinstallieren",
+    "downloading": "Wird heruntergeladen...",
     "close": "Schließen",
     "open": "Öffnen",
     "yes": "Ja",
@@ -569,6 +572,17 @@
       "noCloud": "Keine Cloud-Verbindung erforderlich",
       "deleteData": "Alle Daten löschen",
       "deleteDataDesc": "Löscht alle lokalen Daten unwiderruflich"
+    },
+    "addons": {
+      "title": "Erweiterungen",
+      "description": "Optionale Komponenten für erweiterte Funktionen",
+      "info": "Erweiterungen werden in ~/.fleet-navigator/ gespeichert und können jederzeit installiert werden.",
+      "tesseract": {
+        "description": "Ermöglicht Text-Extraktion aus Bildern und gescannten Dokumenten. Ideal für Verträge, Rechnungen und andere Dokumente.",
+        "languages": "Sprachen",
+        "download": "Tesseract installieren",
+        "ready": "Tesseract ist einsatzbereit"
+      }
     },
     "danger": {
       "title": "DANGER ZONE",

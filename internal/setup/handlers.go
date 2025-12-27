@@ -263,6 +263,11 @@ type VisionDownloader interface {
 	DownloadVisionModel(modelID string, progressCh chan<- SetupProgress) (*VisionDownloadResult, error)
 }
 
+// TesseractDownloader Interface für Tesseract-OCR-Downloads
+type TesseractDownloader interface {
+	DownloadTesseract(progressCh chan<- SetupProgress) error
+}
+
 // LlamaServerStarter Interface zum Starten des llama-servers
 type LlamaServerStarter interface {
 	Start(modelPath string) error
@@ -296,15 +301,16 @@ type ExpertUpdater interface {
 
 // APIHandler enthält die HTTP-Handler für das Setup
 type APIHandler struct {
-	service          *Service
-	modelDownloader  ModelDownloader
-	voiceDownloader  VoiceDownloader
-	visionDownloader VisionDownloader
-	llamaStarter     LlamaServerStarter
-	modelsDir        string
-	modelUpdater     ModelUpdater
-	settingsUpdater  SettingsUpdater
-	expertUpdater    ExpertUpdater
+	service             *Service
+	modelDownloader     ModelDownloader
+	voiceDownloader     VoiceDownloader
+	visionDownloader    VisionDownloader
+	tesseractDownloader TesseractDownloader
+	llamaStarter        LlamaServerStarter
+	modelsDir           string
+	modelUpdater        ModelUpdater
+	settingsUpdater     SettingsUpdater
+	expertUpdater       ExpertUpdater
 }
 
 // NewAPIHandler erstellt einen neuen API-Handler
@@ -327,6 +333,11 @@ func (h *APIHandler) SetVoiceDownloader(downloader VoiceDownloader) {
 // SetVisionDownloader setzt den Vision-Downloader
 func (h *APIHandler) SetVisionDownloader(downloader VisionDownloader) {
 	h.visionDownloader = downloader
+}
+
+// SetTesseractDownloader setzt den Tesseract-Downloader
+func (h *APIHandler) SetTesseractDownloader(downloader TesseractDownloader) {
+	h.tesseractDownloader = downloader
 }
 
 // SetLlamaStarter setzt den llama-server Starter
@@ -1142,6 +1153,152 @@ func (h *APIHandler) RegisterRoutes(mux *http.ServeMux) {
 	// Abschluss-Dialog
 	mux.HandleFunc("/api/setup/summary", h.HandleSetupSummary)
 	mux.HandleFunc("/api/setup/accept-disclaimer", h.HandleAcceptDisclaimer)
+	// Tesseract OCR
+	mux.HandleFunc("/api/setup/tesseract/status", h.HandleTesseractStatus)
+	mux.HandleFunc("/api/setup/tesseract/download", h.HandleTesseractDownload)
+}
+
+// ============================================================================
+// TESSERACT OCR HANDLERS
+// ============================================================================
+
+// HandleTesseractStatus GET /api/setup/tesseract/status
+// Prüft ob Tesseract OCR installiert ist und gibt verfügbare Sprachen zurück
+func (h *APIHandler) HandleTesseractStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	dataDir := h.service.dataDir
+	tesseractDir := filepath.Join(dataDir, "tesseract")
+
+	// Prüfe ob Tesseract-Binary existiert
+	var binaryName string
+	if runtime.GOOS == "windows" {
+		binaryName = "tesseract.exe"
+	} else {
+		binaryName = "tesseract"
+	}
+
+	// Suche Binary (kann in Unterordner sein)
+	var binaryPath string
+	var foundBinary bool
+
+	// Direkt im tesseract-Ordner
+	directPath := filepath.Join(tesseractDir, binaryName)
+	if _, err := os.Stat(directPath); err == nil {
+		binaryPath = directPath
+		foundBinary = true
+	}
+
+	// Suche in Unterordnern
+	if !foundBinary {
+		filepath.Walk(tesseractDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return nil
+			}
+			if info.Name() == binaryName && !info.IsDir() {
+				binaryPath = path
+				foundBinary = true
+				return filepath.SkipAll
+			}
+			return nil
+		})
+	}
+
+	// Prüfe verfügbare Sprachen
+	var languages []string
+	if foundBinary {
+		// Versuche Sprachen zu ermitteln
+		tessdataDir := filepath.Join(filepath.Dir(binaryPath), "tessdata")
+		if _, err := os.Stat(tessdataDir); err == nil {
+			files, _ := os.ReadDir(tessdataDir)
+			for _, f := range files {
+				if strings.HasSuffix(f.Name(), ".traineddata") {
+					lang := strings.TrimSuffix(f.Name(), ".traineddata")
+					if lang != "osd" { // Orientation script detection überspringen
+						languages = append(languages, lang)
+					}
+				}
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"installed":   foundBinary,
+		"binaryPath":  binaryPath,
+		"languages":   languages,
+		"dataDir":     tesseractDir,
+		"downloadUrl": "/api/setup/tesseract/download",
+	})
+}
+
+// HandleTesseractDownload GET /api/setup/tesseract/download
+// Lädt Tesseract OCR herunter (SSE für Progress-Updates)
+func (h *APIHandler) HandleTesseractDownload(w http.ResponseWriter, r *http.Request) {
+	// GET erlauben für EventSource (SSE braucht GET)
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if h.tesseractDownloader == nil {
+		http.Error(w, "Tesseract-Downloader nicht konfiguriert", http.StatusInternalServerError)
+		return
+	}
+
+	// SSE für Progress-Updates
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming nicht unterstützt", http.StatusInternalServerError)
+		return
+	}
+
+	progressChan := make(chan SetupProgress, 10)
+
+	// Download in Goroutine starten
+	go func() {
+		defer close(progressChan)
+
+		err := h.tesseractDownloader.DownloadTesseract(progressChan)
+		if err != nil {
+			progressChan <- SetupProgress{
+				Step:    "tesseract",
+				Message: fmt.Sprintf("Fehler: %v", err),
+				Percent: 0,
+				Done:    false,
+				Error:   err.Error(),
+			}
+		}
+	}()
+
+	// Progress-Updates senden
+	for progress := range progressChan {
+		data, _ := json.Marshal(map[string]interface{}{
+			"step":    progress.Step,
+			"message": progress.Message,
+			"percent": progress.Percent,
+			"done":    progress.Done,
+			"error":   progress.Error,
+		})
+		fmt.Fprintf(w, "data: %s\n\n", data)
+		flusher.Flush()
+
+		if progress.Done || progress.Error != "" {
+			break
+		}
+	}
+
+	// Abschluss senden
+	fmt.Fprintf(w, "data: {\"status\":\"complete\"}\n\n")
+	flusher.Flush()
 }
 
 // ---- Model Downloader Adapter ----

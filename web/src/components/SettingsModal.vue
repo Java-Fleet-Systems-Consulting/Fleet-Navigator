@@ -43,395 +43,36 @@
 
           <!-- TAB: General Settings -->
           <div v-if="activeTab === 'general'">
-          <section class="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-5 rounded-xl border border-gray-200/50 dark:border-gray-700/50 shadow-sm">
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-              <GlobeAltIcon class="w-5 h-5 text-blue-500" />
-              {{ $t('settings.general.title') }}
-            </h3>
-
-            <!-- Language -->
-            <div class="mb-4">
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
-                <LanguageIcon class="w-4 h-4" />
-                {{ $t('settings.general.language') }}
-              </label>
-              <select
-                v-model="settings.language"
-                @change="onLanguageChange"
-                class="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-all focus:ring-2 focus:ring-fleet-orange-500 focus:border-transparent"
-              >
-                <option value="de">🇩🇪 Deutsch</option>
-                <option value="en">🇬🇧 English</option>
-                <option value="tr">🇹🇷 Türkçe</option>
-              </select>
-
-              <!-- Voice Download Dialog -->
-              <div v-if="showVoiceDownloadDialog" class="mt-3 p-4 bg-amber-50 dark:bg-amber-900/30 rounded-xl border border-amber-200 dark:border-amber-700">
-                <div class="flex items-start gap-3">
-                  <SpeakerWaveIcon class="w-6 h-6 text-amber-500 flex-shrink-0 mt-0.5" />
-                  <div class="flex-1">
-                    <h4 class="font-medium text-amber-800 dark:text-amber-200">
-                      {{ $t('settings.voice.voicesNeeded') || 'Stimmen für diese Sprache benötigt' }}
-                    </h4>
-                    <p class="text-sm text-amber-700 dark:text-amber-300 mt-1">
-                      {{ voiceDownloadInfo.availableVoices?.map(v => v.name).join(', ') }}
-                    </p>
-                    <div class="flex gap-2 mt-3">
-                      <button
-                        @click="downloadVoicesForLanguage"
-                        :disabled="isDownloadingVoices"
-                        class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-                      >
-                        <span v-if="isDownloadingVoices">{{ $t('common.downloading') || 'Wird heruntergeladen...' }}</span>
-                        <span v-else>{{ $t('settings.voice.downloadVoices') || 'Stimmen herunterladen' }}</span>
-                      </button>
-                      <button
-                        @click="showVoiceDownloadDialog = false"
-                        class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium transition-colors"
-                      >
-                        {{ $t('common.later') || 'Später' }}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Theme -->
-            <div class="mb-4">
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
-                <SunIcon class="w-4 h-4" />
-                {{ $t('settings.general.theme') }}
-              </label>
-              <select
-                v-model="settings.theme"
-                class="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-all focus:ring-2 focus:ring-fleet-orange-500 focus:border-transparent"
-              >
-                <option value="light">☀️ {{ $t('common.light') }}</option>
-                <option value="dark">🌙 {{ $t('common.dark') }}</option>
-                <option value="auto">🔄 {{ $t('common.auto') }}</option>
-              </select>
-            </div>
-
-            <!-- Modus-Wechsel-Nachrichten Toggle -->
-            <div class="mb-4 p-4 rounded-xl bg-white/50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
-              <div class="flex items-center justify-between">
-                <div class="flex-1">
-                  <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                    <ArrowsRightLeftIcon class="w-4 h-4 text-purple-500" />
-                    {{ $t('settings.general.showModeSwitchMessages') }}
-                  </label>
-                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {{ $t('settings.general.showModeSwitchMessagesDesc') }}
-                  </p>
-                </div>
-                <label class="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" v-model="settings.showModeSwitchMessages" class="sr-only peer">
-                  <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 dark:peer-focus:ring-purple-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-500 peer-checked:bg-purple-500"></div>
-                </label>
-              </div>
-            </div>
-
-            <!-- Schriftgröße -->
-            <div class="mb-4 p-4 rounded-xl bg-white/50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
-              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
-                </svg>
-                {{ $t('settings.general.fontSize') }}
-              </label>
-              <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                {{ $t('settings.general.fontSizeDesc') }}
-              </p>
-              <!-- Slider mit Wertanzeige -->
-              <div class="space-y-3">
-                <div class="flex items-center gap-4">
-                  <span class="text-xs text-gray-500 dark:text-gray-400 w-8">50%</span>
-                  <input
-                    type="range"
-                    min="50"
-                    max="150"
-                    step="5"
-                    :value="settings.fontSize || 100"
-                    @input="setFontSize(Number($event.target.value))"
-                    class="font-size-slider flex-1 h-3 rounded-lg appearance-none cursor-pointer"
-                  />
-                  <span class="text-xs text-gray-500 dark:text-gray-400 w-10">150%</span>
-                </div>
-                <!-- Aktuelle Größe und Reset-Button -->
-                <div class="flex items-center justify-between">
-                  <div class="flex items-center gap-2">
-                    <span class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ settings.fontSize || 100 }}%</span>
-                    <span class="text-xs text-gray-500" :style="{ fontSize: (settings.fontSize || 100) * 0.14 + 'px' }">
-                      {{ $t('settings.general.sampleText') }}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    @click="setFontSize(100)"
-                    class="px-3 py-1 text-xs rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition-colors"
-                  >
-                    {{ $t('common.reset') }}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- CPU-Only Mode Toggle (für Screencasts/Präsentationen) -->
-            <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <div class="flex items-center justify-between">
-                <div class="flex-1">
-                  <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                    <CpuChipIcon class="w-4 h-4 text-orange-500" />
-                    {{ $t('settings.hardware.cpuOnly') }}
-                  </label>
-                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {{ $t('settings.hardware.cpuOnlyDesc') }}
-                  </p>
-                </div>
-                <ToggleSwitch v-model="settings.cpuOnly" color="orange" />
-              </div>
-              <!-- Info Box -->
-              <div v-if="settings.cpuOnly" class="mt-2 p-2 rounded-lg bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800">
-                <p class="text-xs text-orange-800 dark:text-orange-200 flex items-center gap-2">
-                  <ExclamationTriangleIcon class="w-4 h-4 flex-shrink-0" />
-                  <span>{{ $t('settings.hardware.cpuOnlyActive') }}</span>
-                </p>
-              </div>
-
-              <!-- VRAM Settings (im Allgemein Tab) -->
-              <div class="mt-4">
-                <VRAMSettings />
-              </div>
-            </div>
-
-          </section>
+            <GeneralSettingsTab
+              :settings="settings"
+              :voice-download-info="voiceDownloadInfo"
+              :is-downloading-voices="isDownloadingVoices"
+              @update:settings="settings = $event"
+              @language-change="onLanguageChange"
+              @download-voices="downloadVoicesForLanguage"
+            />
           </div>
 
           <!-- TAB: Fleet Mates -->
           <div v-if="activeTab === 'mates'">
-            <section class="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-5 rounded-xl border border-gray-200/50 dark:border-gray-700/50 shadow-sm">
-              <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                <UsersIcon class="w-5 h-5 text-blue-500" />
-                {{ $t('mates.title') }}
-              </h3>
-              <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                {{ $t('settings.mates.subtitle') }}
-              </p>
-
-              <!-- Pending Pairing Requests -->
-              <div v-if="pendingPairingRequests.length > 0" class="mb-6">
-                <h4 class="text-md font-semibold text-amber-600 dark:text-amber-400 mb-3 flex items-center gap-2">
-                  <ExclamationTriangleIcon class="w-5 h-5" />
-                  {{ $t('settings.mates.pendingRequests') }} ({{ pendingPairingRequests.length }})
-                </h4>
-                <div class="space-y-3">
-                  <div
-                    v-for="request in pendingPairingRequests"
-                    :key="request.requestId"
-                    class="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50"
-                  >
-                    <div class="flex items-center justify-between">
-                      <div class="flex items-center gap-3">
-                        <div class="p-2 rounded-lg" :class="getMateTypeColor(request.mateType)">
-                          <component :is="getMateTypeIcon(request.mateType)" class="w-5 h-5 text-white" />
-                        </div>
-                        <div>
-                          <h5 class="font-semibold text-gray-900 dark:text-white">{{ request.mateName }}</h5>
-                          <p class="text-xs text-gray-500 dark:text-gray-400">{{ getMateTypeLabel(request.mateType) }}</p>
-                        </div>
-                      </div>
-                      <div class="flex items-center gap-2">
-                        <!-- Pairing Code Display -->
-                        <div class="flex gap-1 mr-4">
-                          <span
-                            v-for="(digit, index) in request.pairingCode.split('')"
-                            :key="index"
-                            class="w-8 h-10 flex items-center justify-center text-lg font-mono font-bold bg-gradient-to-br from-blue-500 to-cyan-500 text-white rounded"
-                          >
-                            {{ digit }}
-                          </span>
-                        </div>
-                        <button
-                          @click="rejectPairingRequest(request.requestId)"
-                          :disabled="processingPairing"
-                          class="px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all disabled:opacity-50"
-                        >
-                          <XMarkIcon class="w-5 h-5" />
-                        </button>
-                        <button
-                          @click="approvePairingRequest(request.requestId)"
-                          :disabled="processingPairing"
-                          class="px-3 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all shadow-lg disabled:opacity-50"
-                        >
-                          <CheckIcon class="w-5 h-5" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Trusted Mates List -->
-              <div>
-                <h4 class="text-md font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
-                  <LinkIcon class="w-5 h-5" />
-                  {{ $t('settings.mates.connectedMates') }} ({{ trustedMates.length }})
-                </h4>
-
-                <div v-if="trustedMates.length === 0" class="p-6 text-center rounded-xl bg-gray-100 dark:bg-gray-800 border border-dashed border-gray-300 dark:border-gray-600">
-                  <UsersIcon class="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                  <p class="text-gray-500 dark:text-gray-400">{{ $t('mates.noMates') }}</p>
-                  <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">{{ $t('settings.mates.connectViaSystem') }}</p>
-                </div>
-
-                <div v-else class="space-y-3">
-                  <div
-                    v-for="mate in trustedMates"
-                    :key="mate.mateId"
-                    class="p-4 rounded-xl bg-white/50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 flex items-center justify-between"
-                  >
-                    <div class="flex items-center gap-3">
-                      <div class="p-2 rounded-lg" :class="getMateTypeColor(mate.mateType)">
-                        <component :is="getMateTypeIcon(mate.mateType)" class="w-5 h-5 text-white" />
-                      </div>
-                      <div>
-                        <h5 class="font-semibold text-gray-900 dark:text-white">{{ mate.name }}</h5>
-                        <p class="text-xs text-gray-500 dark:text-gray-400">
-                          {{ getMateTypeLabel(mate.mateType) }}
-                          <span v-if="mate.lastSeen" class="ml-2">• {{ $t('mates.lastSeen') }}: {{ formatDateAbsolute(mate.lastSeen) }}</span>
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      @click="removeTrustedMate(mate.mateId)"
-                      :disabled="removingMateId === mate.mateId"
-                      class="px-3 py-2 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all disabled:opacity-50"
-                      :title="$t('mates.forgetDevice')"
-                    >
-                      <TrashIcon v-if="removingMateId !== mate.mateId" class="w-5 h-5" />
-                      <ArrowPathIcon v-else class="w-5 h-5 animate-spin" />
-                    </button>
-                  </div>
-                </div>
-
-                <!-- Forget All Button -->
-                <div v-if="trustedMates.length > 1" class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <button
-                    @click="forgetAllMates"
-                    :disabled="forgettingMates"
-                    class="w-full px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all border border-red-200 dark:border-red-800 flex items-center justify-center gap-2"
-                  >
-                    <TrashIcon v-if="!forgettingMates" class="w-5 h-5" />
-                    <ArrowPathIcon v-else class="w-5 h-5 animate-spin" />
-                    {{ forgettingMates ? $t('settings.mates.forgetting') : $t('settings.mates.forgetAllButton') }}
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            <!-- Fleet Mates Model Assignment (integriert in Fleet Mates Tab) -->
-            <section class="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-5 rounded-xl border border-gray-200/50 dark:border-gray-700/50 shadow-sm mt-6">
-              <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                <CpuChipIcon class="w-5 h-5 text-purple-500" />
-                {{ $t('settings.mates.modelAssignment') }}
-              </h3>
-
-              <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                {{ $t('settings.mates.modelAssignmentDesc') }}
-              </p>
-
-              <div class="space-y-4">
-                <!-- Email Model (Thunderbird Mate) -->
-                <div class="p-4 rounded-xl bg-white/50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
-                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
-                    <span class="text-xl">📧</span>
-                    {{ $t('settings.models.emailModel') }}
-                    <span class="text-xs text-gray-500 dark:text-gray-400">(Thunderbird Mate)</span>
-                  </label>
-                  <select
-                    v-model="mateModels.emailModel"
-                    @change="saveEmailModel"
-                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-all focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">-- {{ $t('common.default') }} (llama3.2:3b) --</option>
-                    <option v-for="model in fastModels" :key="model.name" :value="model.name">
-                      {{ model.name }} ({{ formatSize(model.size) }})
-                    </option>
-                  </select>
-                  <p class="text-xs text-gray-500 mt-1">{{ $t('settings.models.emailModelDesc') }}</p>
-                </div>
-
-                <!-- Document Model (Writer Mate) -->
-                <div class="p-4 rounded-xl bg-white/50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
-                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
-                    <span class="text-xl">✍️</span>
-                    {{ $t('settings.models.documentModel') }}
-                    <span class="text-xs text-gray-500 dark:text-gray-400">(Writer Mate)</span>
-                  </label>
-                  <select
-                    v-model="mateModels.documentModel"
-                    @change="saveDocumentModel"
-                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-all focus:ring-2 focus:ring-green-500"
-                  >
-                    <option value="">-- {{ $t('common.default') }} --</option>
-                    <option v-for="model in availableModels" :key="model.name" :value="model.name">
-                      {{ model.name }} ({{ formatSize(model.size) }})
-                    </option>
-                  </select>
-                  <p class="text-xs text-gray-500 mt-1">{{ $t('settings.models.documentModelDesc') }}</p>
-                </div>
-
-                <!-- Log Analysis Model (OS Mate) -->
-                <div class="p-4 rounded-xl bg-white/50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
-                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
-                    <span class="text-xl">📊</span>
-                    Log-Analyse-Modell
-                    <span class="text-xs text-gray-500 dark:text-gray-400">(OS Mate)</span>
-                  </label>
-                  <select
-                    v-model="mateModels.logAnalysisModel"
-                    @change="saveLogAnalysisModel"
-                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-all focus:ring-2 focus:ring-orange-500"
-                  >
-                    <option value="">-- Standard --</option>
-                    <option v-for="model in availableModels" :key="model.name" :value="model.name">
-                      {{ model.name }} ({{ formatSize(model.size) }})
-                    </option>
-                  </select>
-                  <p class="text-xs text-gray-500 mt-1">Für Log-Datei-Analyse und Fehlersuche</p>
-                </div>
-
-                <!-- Coder Model (FleetCoder) -->
-                <div class="p-4 rounded-xl bg-white/50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
-                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
-                    <span class="text-xl">💻</span>
-                    Coder-Modell
-                    <span class="text-xs text-gray-500 dark:text-gray-400">(FleetCoder)</span>
-                  </label>
-                  <select
-                    v-model="mateModels.coderModel"
-                    @change="saveCoderModel"
-                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-all focus:ring-2 focus:ring-cyan-500"
-                  >
-                    <option value="">-- Standard --</option>
-                    <option v-for="model in availableModels" :key="model.name" :value="model.name">
-                      {{ model.name }} ({{ formatSize(model.size) }})
-                    </option>
-                  </select>
-                  <p class="text-xs text-gray-500 mt-1">Für Code-Assistenz und Programmierung (größeres Modell empfohlen: 14B+)</p>
-                </div>
-              </div>
-
-              <div class="mt-4 p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50">
-                <div class="flex items-start gap-2">
-                  <InformationCircleIcon class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-                  <p class="text-xs text-blue-800 dark:text-blue-200">
-                    <strong>Tipp:</strong> Für Email-Klassifizierung eignen sich schnelle Modelle wie <code>llama3.2:3b</code> oder <code>qwen2.5:7b</code>.
-                  </p>
-                </div>
-              </div>
-            </section>
+            <MatesSettingsTab
+              :trusted-mates="trustedMates"
+              :pending-pairing-requests="pendingPairingRequests"
+              :processing-pairing="processingPairing"
+              :removing-mate-id="removingMateId"
+              :forgetting-mates="forgettingMates"
+              :mate-models="mateModels"
+              :fast-models="fastModels"
+              :available-models="availableModels"
+              @approve-pairing="approvePairingRequest"
+              @reject-pairing="rejectPairingRequest"
+              @remove-mate="removeTrustedMate"
+              @forget-all-mates="forgetAllMates"
+              @save-email-model="saveEmailModel"
+              @save-document-model="saveDocumentModel"
+              @save-log-analysis-model="saveLogAnalysisModel"
+              @save-coder-model="saveCoderModel"
+            />
           </div>
 
           <!-- TAB: LLM Provider -->
@@ -439,106 +80,17 @@
             <ProviderSettings />
           </div>
 
-          <!-- TAB: Database (PostgreSQL + Vector DB) -->
-          <div v-if="activeTab === 'database'">
-            <PostgreSQLMigration @status-change="onPostgresStatusChange" />
-          </div>
-
-          <!-- TAB: Custom Modell (System-Prompts + Parameter) -->
-          <div v-if="activeTab === 'customModels'" class="space-y-6">
-            <section class="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-5 rounded-xl border border-gray-200/50 dark:border-gray-700/50 shadow-sm">
-              <div class="flex items-center justify-between mb-4">
-                <div>
-                  <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                    <DocumentTextIcon class="w-5 h-5 text-blue-500" />
-                    {{ $t('settings.prompts.management') }}
-                  </h3>
-                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {{ $t('settings.prompts.managementDesc') }}
-                  </p>
-                </div>
-                <button
-                  @click="showPromptEditor = true; editingPrompt = null; resetPromptForm()"
-                  class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors flex items-center gap-2"
-                >
-                  <DocumentDuplicateIcon class="w-4 h-4" />
-                  {{ $t('settings.prompts.create') }}
-                </button>
-              </div>
-
-              <!-- Prompts List -->
-              <div v-if="systemPrompts.length === 0" class="text-center py-12 text-gray-500 dark:text-gray-400">
-                <DocumentTextIcon class="w-16 h-16 mx-auto mb-3 opacity-20" />
-                <p class="font-medium">{{ $t('settings.prompts.noPrompts') }}</p>
-                <p class="text-xs mt-2">{{ $t('settings.prompts.createFirstHint') }}</p>
-              </div>
-
-              <div v-else class="space-y-2">
-                <div
-                  v-for="prompt in systemPrompts"
-                  :key="prompt.id"
-                  class="border border-gray-200 dark:border-gray-700 rounded-lg p-3 hover:border-blue-400 dark:hover:border-blue-600 transition-colors bg-white dark:bg-gray-800"
-                >
-                  <div class="flex items-start justify-between gap-3">
-                    <div class="flex-1 min-w-0">
-                      <div class="flex items-center gap-2 mb-1">
-                        <h4 class="font-semibold text-sm text-gray-900 dark:text-white">
-                          {{ prompt.name }}
-                        </h4>
-                        <span v-if="prompt.isDefault" class="px-1.5 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 text-xs rounded">
-                          {{ $t('settings.prompts.default') }}
-                        </span>
-                      </div>
-                      <p class="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
-                        {{ prompt.content }}
-                      </p>
-                    </div>
-                    <div class="flex items-center gap-1">
-                      <!-- Aktivieren Button -->
-                      <button
-                        @click="activateSystemPrompt(prompt)"
-                        class="p-1.5 rounded transition-colors"
-                        :class="prompt.isDefault
-                          ? 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30'
-                          : 'text-gray-400 dark:text-gray-500 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'"
-                        :title="prompt.isDefault ? $t('settings.prompts.activePrompt') : $t('settings.prompts.activateAsDefault')"
-                      >
-                        <CheckCircleIcon class="w-4 h-4" />
-                      </button>
-                      <button
-                        @click="editSystemPrompt(prompt)"
-                        class="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
-                        :title="$t('common.edit')"
-                      >
-                        <WrenchScrewdriverIcon class="w-4 h-4" />
-                      </button>
-                      <button
-                        @click="deleteSystemPrompt(prompt.id)"
-                        class="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                        :title="$t('common.delete')"
-                      >
-                        <TrashIcon class="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <!-- LLM Sampling Parameter Section -->
-            <section class="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-5 rounded-xl border border-gray-200/50 dark:border-gray-700/50 shadow-sm">
-              <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                <AdjustmentsHorizontalIcon class="w-5 h-5 text-orange-500" />
-                {{ $t('settings.customModels.samplingTitle') }}
-              </h3>
-              <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                {{ $t('settings.customModels.samplingDesc') }}
-              </p>
-
-              <SimpleSamplingParams
-                v-model="samplingParams"
-              />
-            </section>
+          <!-- TAB: Custom Modell (System-Prompts + Sampling) -->
+          <div v-if="activeTab === 'customModels'">
+            <CustomModelsTab
+              :system-prompts="systemPrompts"
+              :sampling-params="samplingParams"
+              @create-prompt="showPromptEditor = true; editingPrompt = null; resetPromptForm()"
+              @edit-prompt="editSystemPrompt"
+              @delete-prompt="deleteSystemPrompt"
+              @activate-prompt="activateSystemPrompt"
+              @update:sampling-params="samplingParams = $event"
+            />
           </div>
 
           <!-- TAB: Personal Info -->
@@ -553,170 +105,20 @@
 
           <!-- TAB: Agents -->
           <div v-if="activeTab === 'agents'">
-          <!-- Vision Settings -->
-          <section class="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-5 rounded-xl border border-gray-200/50 dark:border-gray-700/50 shadow-sm">
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-              <PhotoIcon class="w-5 h-5 text-indigo-500" />
-              {{ $t('settings.agents.visionModel') }}
-            </h3>
-
-            <!-- Auto-select Vision Model -->
-            <div class="mb-4 p-4 rounded-xl bg-white/50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
-              <div class="flex items-center justify-between">
-                <div class="flex-1">
-                  <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                    <EyeIcon class="w-4 h-4" />
-                    {{ $t('settings.agents.autoVisionModel') }}
-                  </label>
-                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {{ $t('settings.agents.autoVisionModelDesc') }}
-                  </p>
-                </div>
-                <ToggleSwitch v-model="settings.autoSelectVisionModel" color="indigo" />
-              </div>
-            </div>
-
-            <!-- Preferred Vision Model -->
-            <div class="mb-4">
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                {{ $t('settings.agents.preferredVisionModel') }}
-              </label>
-              <select
-                v-model="modelSelectionSettings.visionModel"
-                class="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500"
-              >
-                <option v-for="model in visionModels" :key="model" :value="model">
-                  {{ model }}
-                </option>
-              </select>
-              <p v-if="visionModels.length > 0" class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                {{ visionModels.length }} {{ $t('settings.agents.visionModelsAvailable') }}
-              </p>
-              <p v-else class="mt-2 text-xs text-yellow-600 dark:text-yellow-400">
-                ⚠️ {{ $t('settings.agents.noVisionModels') }}
-              </p>
-            </div>
-
-            <!-- Vision Chaining -->
-            <div class="mb-4 p-4 rounded-xl bg-white/50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
-              <div class="flex items-center justify-between">
-                <div class="flex-1">
-                  <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                    <LinkIcon class="w-4 h-4" />
-                    {{ $t('settings.agents.visionChaining') }}
-                  </label>
-                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {{ $t('settings.agents.visionChainingDesc') }}
-                  </p>
-                </div>
-                <ToggleSwitch v-model="modelSelectionSettings.visionChainingEnabled" color="indigo" />
-              </div>
-            </div>
-
-            <!-- Web Search: Think First -->
-            <div class="mb-4 p-4 rounded-xl bg-blue-50/50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700">
-              <div class="flex items-center justify-between">
-                <div class="flex-1">
-                  <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                    <LightBulbIcon class="w-4 h-4 text-blue-500" />
-                    {{ $t('settings.agents.thinkFirst') || '🧠 Websuche: Erst nachdenken' }}
-                  </label>
-                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {{ $t('settings.agents.thinkFirstDesc') || 'LLM antwortet erst selbst, bei Unsicherheit → automatische Websuche' }}
-                  </p>
-                </div>
-                <ToggleSwitch v-model="webSearchThinkFirst" color="blue" />
-              </div>
-              <!-- Explanation -->
-              <div v-if="webSearchThinkFirst" class="mt-3 p-2 bg-green-50 dark:bg-green-900/30 rounded-lg">
-                <p class="text-xs text-green-700 dark:text-green-300">
-                  ✅ <strong>Aktiv:</strong> Das LLM versucht erst selbst zu antworten. Nur bei Unsicherheit wird automatisch eine Websuche durchgeführt.
-                </p>
-              </div>
-              <div v-else class="mt-3 p-2 bg-orange-50 dark:bg-orange-900/30 rounded-lg">
-                <p class="text-xs text-orange-700 dark:text-orange-300">
-                  ⚡ <strong>Sofort-Modus:</strong> Bei aktivierter Experten-Websuche wird sofort gesucht (schneller, aber mehr API-Calls).
-                </p>
-              </div>
-            </div>
-          </section>
-
-          <!-- OS Mate - File Search (RAG) -->
-          <section class="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-5 rounded-xl border border-gray-200/50 dark:border-gray-700/50 shadow-sm mt-6">
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-              <FolderIcon class="w-5 h-5 text-amber-500" />
-              {{ $t('settings.agents.osMateTitle') }}
-            </h3>
-            <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              {{ $t('settings.agents.osMateDesc') }}
-            </p>
-
-            <!-- File Search Status -->
-            <div v-if="fileSearchStatus" class="mb-4 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">
-              <div class="flex items-center gap-2 text-sm text-blue-700 dark:text-blue-300">
-                <span v-if="fileSearchStatus.indexingInProgress" class="animate-spin">⏳</span>
-                <span v-else>📚</span>
-                <span>
-                  {{ fileSearchStatus.indexedFileCount }} {{ $t('settings.agents.filesIndexed') }}
-                  <span v-if="fileSearchStatus.locateAvailable" class="text-xs text-green-600 dark:text-green-400 ml-2">({{ $t('settings.agents.locateAvailable') }})</span>
-                </span>
-              </div>
-            </div>
-
-            <!-- Search Folders List -->
-            <div class="space-y-3 mb-4">
-              <div v-for="folder in fileSearchFolders" :key="folder.folderId"
-                   class="p-3 rounded-lg bg-white/50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                <div class="flex items-center gap-3 flex-1">
-                  <FolderOpenIcon class="w-5 h-5 text-amber-500" />
-                  <div class="flex-1 min-w-0">
-                    <div class="font-medium text-gray-900 dark:text-white truncate">{{ folder.name }}</div>
-                    <div class="text-xs text-gray-500 dark:text-gray-400 truncate">{{ folder.folderPath }}</div>
-                    <div class="text-xs text-gray-400 dark:text-gray-500">
-                      {{ folder.fileCount || 0 }} {{ $t('settings.agents.files') }}
-                      <span v-if="folder.lastIndexed" class="ml-2">• {{ $t('settings.agents.indexed') }}: {{ formatDateAbsolute(folder.lastIndexed) }}</span>
-                    </div>
-                  </div>
-                </div>
-                <div class="flex items-center gap-2">
-                  <button @click="reindexFolder(folder.folderId)"
-                          class="p-1.5 rounded hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400"
-                          :title="$t('settings.agents.reindex')">
-                    <ArrowPathIcon class="w-4 h-4" />
-                  </button>
-                  <button @click="removeSearchFolder(folder.folderId)"
-                          class="p-1.5 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400"
-                          :title="$t('common.remove')">
-                    <TrashIcon class="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              <div v-if="fileSearchFolders.length === 0"
-                   class="p-4 rounded-lg bg-gray-100/50 dark:bg-gray-800/30 border border-dashed border-gray-300 dark:border-gray-600 text-center">
-                <FolderIcon class="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                <p class="text-sm text-gray-500 dark:text-gray-400">{{ $t('settings.agents.noFoldersConfigured') }}</p>
-              </div>
-            </div>
-
-            <!-- Add Folder Form -->
-            <div class="p-4 rounded-xl bg-white/50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ $t('settings.agents.addFolder') }}</label>
-              <div class="flex gap-2">
-                <input type="text" v-model="newFolderPath"
-                       :placeholder="$t('settings.agents.folderPathPlaceholder')"
-                       class="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-amber-500" />
-                <button @click="addSearchFolder"
-                        :disabled="!newFolderPath"
-                        class="px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors">
-                  {{ $t('common.add') }}
-                </button>
-              </div>
-              <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                {{ $t('settings.agents.folderPathExample') }}
-              </p>
-            </div>
-          </section>
+            <AgentsSettingsTab
+              :settings="settings"
+              :model-selection-settings="modelSelectionSettings"
+              :web-search-think-first="webSearchThinkFirst"
+              :vision-models="visionModels"
+              :file-search-folders="fileSearchFolders"
+              :file-search-status="fileSearchStatus"
+              @update:settings="settings = $event"
+              @update:model-selection-settings="modelSelectionSettings = $event"
+              @update:web-search-think-first="webSearchThinkFirst = $event"
+              @add-folder="addSearchFolder"
+              @remove-folder="removeSearchFolder"
+              @reindex-folder="reindexFolder"
+            />
           </div>
 
           <!-- TAB: Web Search Settings -->
@@ -1568,154 +970,25 @@
             </section>
           </div>
 
+          <!-- TAB: Addons/Erweiterungen -->
+          <div v-if="activeTab === 'addons'">
+            <AddonsSettingsTab
+              :tesseract-status="tesseractStatus"
+              :tesseract-downloading="tesseractDownloading"
+              :tesseract-download-progress="tesseractDownloadProgress"
+              :tesseract-download-message="tesseractDownloadMessage"
+              @download-tesseract="downloadTesseract"
+              @postgres-status-change="onPostgresStatusChange"
+            />
+          </div>
+
           <!-- TAB: Danger Zone -->
           <div v-if="activeTab === 'danger'">
-            <section class="danger-zone-section bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/30 dark:to-red-800/30 p-6 rounded-xl border-2 border-red-300 dark:border-red-700 shadow-lg">
-              <div class="flex items-start gap-3 mb-6">
-                <ShieldExclamationIcon class="w-8 h-8 text-red-600 dark:text-red-400 flex-shrink-0" />
-                <div>
-                  <h3 class="text-xl font-bold text-red-900 dark:text-red-100 mb-2">
-                    ⚠️ {{ $t('settings.danger.title') }}
-                  </h3>
-                  <p class="text-sm text-red-800 dark:text-red-200" v-html="$t('settings.danger.warningPermanent')">
-                  </p>
-                </div>
-              </div>
-
-              <!-- Selective Data Reset -->
-              <div class="bg-white/80 dark:bg-gray-900/80 p-5 rounded-xl border-2 border-red-400 dark:border-red-600">
-                <div class="flex items-start gap-3 mb-4">
-                  <TrashIcon class="w-6 h-6 text-red-600 dark:text-red-400 flex-shrink-0 mt-1" />
-                  <div class="flex-1">
-                    <h4 class="text-lg font-bold text-gray-900 dark:text-white mb-2">
-                      {{ $t('settings.danger.selectiveDelete') }}
-                    </h4>
-                    <p class="text-sm text-gray-700 dark:text-gray-300 mb-4">
-                      {{ $t('settings.danger.selectDataPrompt') }}
-                    </p>
-
-                    <!-- Checkboxes for selective deletion -->
-                    <div class="space-y-3 mb-4">
-                      <!-- Chats & Messages -->
-                      <label class="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors">
-                        <input
-                          type="checkbox"
-                          v-model="resetSelection.chats"
-                          class="mt-1 w-4 h-4 text-red-600 rounded focus:ring-red-500"
-                        />
-                        <div class="flex-1">
-                          <div class="font-semibold text-gray-900 dark:text-white">{{ $t('settings.danger.chats') }}</div>
-                          <div class="text-xs text-gray-600 dark:text-gray-400">{{ $t('settings.danger.chatsDesc') }}</div>
-                        </div>
-                      </label>
-
-                      <!-- Projects & Files -->
-                      <label class="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors">
-                        <input
-                          type="checkbox"
-                          v-model="resetSelection.projects"
-                          class="mt-1 w-4 h-4 text-red-600 rounded focus:ring-red-500"
-                        />
-                        <div class="flex-1">
-                          <div class="font-semibold text-gray-900 dark:text-white">{{ $t('settings.danger.projects') }}</div>
-                          <div class="text-xs text-gray-600 dark:text-gray-400">{{ $t('settings.danger.projectsDesc') }}</div>
-                        </div>
-                      </label>
-
-                      <!-- Custom Models -->
-                      <label class="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors border-2 border-orange-300 dark:border-orange-700">
-                        <input
-                          type="checkbox"
-                          v-model="resetSelection.customModels"
-                          class="mt-1 w-4 h-4 text-red-600 rounded focus:ring-red-500"
-                        />
-                        <div class="flex-1">
-                          <div class="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                            {{ $t('settings.danger.customModels') }}
-                            <span class="text-xs bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 px-2 py-0.5 rounded">{{ $t('settings.danger.optional') }}</span>
-                          </div>
-                          <div class="text-xs text-gray-600 dark:text-gray-400">
-                            {{ $t('settings.danger.customModelsDesc') }}
-                          </div>
-                        </div>
-                      </label>
-
-                      <!-- Settings -->
-                      <label class="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors">
-                        <input
-                          type="checkbox"
-                          v-model="resetSelection.settings"
-                          class="mt-1 w-4 h-4 text-red-600 rounded focus:ring-red-500"
-                        />
-                        <div class="flex-1">
-                          <div class="font-semibold text-gray-900 dark:text-white">{{ $t('settings.danger.settingsConfig') }}</div>
-                          <div class="text-xs text-gray-600 dark:text-gray-400">{{ $t('settings.danger.settingsConfigDesc') }}</div>
-                        </div>
-                      </label>
-
-                      <!-- Personal Info -->
-                      <label class="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors">
-                        <input
-                          type="checkbox"
-                          v-model="resetSelection.personalInfo"
-                          class="mt-1 w-4 h-4 text-red-600 rounded focus:ring-red-500"
-                        />
-                        <div class="flex-1">
-                          <div class="font-semibold text-gray-900 dark:text-white">{{ $t('settings.danger.personalInfo') }}</div>
-                          <div class="text-xs text-gray-600 dark:text-gray-400">{{ $t('settings.danger.personalInfoDesc') }}</div>
-                        </div>
-                      </label>
-
-                      <!-- Templates -->
-                      <label class="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors">
-                        <input
-                          type="checkbox"
-                          v-model="resetSelection.templates"
-                          class="mt-1 w-4 h-4 text-red-600 rounded focus:ring-red-500"
-                        />
-                        <div class="flex-1">
-                          <div class="font-semibold text-gray-900 dark:text-white">{{ $t('settings.danger.templates') }}</div>
-                          <div class="text-xs text-gray-600 dark:text-gray-400">{{ $t('settings.danger.templatesDesc') }}</div>
-                        </div>
-                      </label>
-
-                      <!-- Statistics -->
-                      <label class="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors">
-                        <input
-                          type="checkbox"
-                          v-model="resetSelection.stats"
-                          class="mt-1 w-4 h-4 text-red-600 rounded focus:ring-red-500"
-                        />
-                        <div class="flex-1">
-                          <div class="font-semibold text-gray-900 dark:text-white">{{ $t('settings.danger.stats') }}</div>
-                          <div class="text-xs text-gray-600 dark:text-gray-400">{{ $t('settings.danger.statsDesc') }}</div>
-                        </div>
-                      </label>
-                    </div>
-
-                    <div class="p-3 bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-400 dark:border-yellow-700 rounded-lg mb-4">
-                      <p class="text-xs text-yellow-900 dark:text-yellow-200 flex items-start gap-2">
-                        <ExclamationTriangleIcon class="w-4 h-4 flex-shrink-0 mt-0.5" />
-                        <span>
-                          <strong>{{ $t('common.note') }}:</strong> {{ $t('settings.danger.noteAppReload') }}
-                        </span>
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  @click="handleResetAll"
-                  :disabled="resetting || !hasAnySelection"
-                  :title="hasAnySelection ? $t('settings.danger.deleteSelectedTitle') : $t('settings.danger.selectCategoryFirst')"
-                  class="w-full px-6 py-3 rounded-xl bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-bold shadow-lg hover:shadow-xl transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  <TrashIcon v-if="!resetting" class="w-5 h-5" />
-                  <ArrowPathIcon v-else class="w-5 h-5 animate-spin" />
-                  {{ resetting ? $t('settings.danger.deleting') : (hasAnySelection ? $t('settings.danger.deleteSelected') : $t('settings.danger.noSelection')) }}
-                </button>
-              </div>
-            </section>
+            <DangerZoneTab
+              v-model:resetSelection="resetSelection"
+              :resetting="resetting"
+              @reset-all="handleResetAll"
+            />
           </div>
 
         </div>
@@ -1876,7 +1149,9 @@ import {
   ArrowDownTrayIcon,
   ArrowsRightLeftIcon,
   LightBulbIcon,
-  ChartBarIcon
+  ChartBarIcon,
+  PuzzlePieceIcon,
+  DocumentMagnifyingGlassIcon
 } from '@heroicons/vue/24/outline'
 import { useI18n } from 'vue-i18n'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -1895,6 +1170,16 @@ import PostgreSQLMigration from './settings/PostgreSQLMigration.vue'
 import VoiceStore from './VoiceStore.vue'
 import ObserverSettings from './ObserverSettings.vue'
 import { filterVisionModels, filterCodeModels } from '../utils/modelFilters'
+
+// New refactored tab components
+import GeneralSettingsTab from './settings/GeneralSettingsTab.vue'
+import MatesSettingsTab from './settings/MatesSettingsTab.vue'
+import AgentsSettingsTab from './settings/AgentsSettingsTab.vue'
+import AddonsSettingsTab from './settings/AddonsSettingsTab.vue'
+import DangerZoneTab from './settings/DangerZoneTab.vue'
+import CustomModelsTab from './settings/CustomModelsTab.vue'
+import WebSearchSettingsTab from './settings/WebSearchSettingsTab.vue'
+import VoiceSettingsTab from './settings/VoiceSettingsTab.vue'
 
 const { success, error: errorToast } = useToast()
 const { confirm, confirmDelete } = useConfirmDialog()
@@ -2027,6 +1312,100 @@ async function loadFileSearchStatus() {
 }
 
 // ========================================
+// Tesseract OCR Status
+// ========================================
+
+const tesseractStatus = ref({
+  installed: false,
+  binaryPath: '',
+  languages: [],
+  dataDir: ''
+})
+const tesseractDownloading = ref(false)
+const tesseractDownloadProgress = ref(0)
+const tesseractDownloadMessage = ref('')
+
+async function loadTesseractStatus() {
+  try {
+    const response = await fetch('/api/setup/tesseract/status')
+    if (response.ok) {
+      tesseractStatus.value = await response.json()
+    }
+  } catch (err) {
+    console.error('Failed to load Tesseract status:', err)
+  }
+}
+
+async function downloadTesseract() {
+  if (tesseractDownloading.value) return
+
+  tesseractDownloading.value = true
+  tesseractDownloadProgress.value = 0
+  tesseractDownloadMessage.value = 'Starte Download...'
+
+  try {
+    const eventSource = new EventSource('/api/setup/tesseract/download')
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+
+        if (data.status === 'complete') {
+          eventSource.close()
+          tesseractDownloading.value = false
+          tesseractDownloadProgress.value = 100
+          tesseractDownloadMessage.value = 'Installation abgeschlossen!'
+          success('Tesseract OCR erfolgreich installiert!')
+          // Status neu laden
+          loadTesseractStatus()
+          return
+        }
+
+        if (data.error) {
+          eventSource.close()
+          tesseractDownloading.value = false
+          tesseractDownloadMessage.value = 'Fehler: ' + data.error
+          errorToast('Tesseract-Installation fehlgeschlagen: ' + data.error)
+          return
+        }
+
+        tesseractDownloadProgress.value = data.percent || 0
+        tesseractDownloadMessage.value = data.message || 'Downloading...'
+
+        if (data.done) {
+          eventSource.close()
+          tesseractDownloading.value = false
+          tesseractDownloadProgress.value = 100
+          success('Tesseract OCR erfolgreich installiert!')
+          loadTesseractStatus()
+        }
+      } catch (e) {
+        console.error('Error parsing SSE:', e)
+      }
+    }
+
+    eventSource.onerror = (error) => {
+      console.error('SSE Error:', error)
+      eventSource.close()
+      tesseractDownloading.value = false
+      // Prüfe ob Download erfolgreich war
+      if (tesseractDownloadProgress.value >= 99) {
+        success('Tesseract OCR erfolgreich installiert!')
+        loadTesseractStatus()
+      } else {
+        tesseractDownloadMessage.value = 'Verbindungsfehler'
+        errorToast('Download-Verbindung unterbrochen')
+      }
+    }
+  } catch (err) {
+    console.error('Failed to download Tesseract:', err)
+    tesseractDownloading.value = false
+    tesseractDownloadMessage.value = 'Fehler: ' + err.message
+    errorToast('Tesseract-Download fehlgeschlagen')
+  }
+}
+
+// ========================================
 // Sprachwechsel mit Voice-Download Dialog
 // ========================================
 
@@ -2132,14 +1511,15 @@ async function downloadVoicesForLanguage() {
   }
 }
 
-async function addSearchFolder() {
-  if (!newFolderPath.value) return
+async function addSearchFolder(folderPath = null) {
+  const pathToAdd = folderPath || newFolderPath.value
+  if (!pathToAdd) return
 
   try {
     const response = await secureFetch('/api/file-search/folders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ folderPath: newFolderPath.value })
+      body: JSON.stringify({ folderPath: pathToAdd })
     })
 
     if (response.ok) {
@@ -2186,13 +1566,13 @@ const tabs = [
   { id: 'general', label: 'Allgemein', icon: GlobeAltIcon },
   { id: 'mates', label: 'Fleet Mates', icon: UsersIcon },
   { id: 'providers', label: 'LLM Provider', icon: CpuChipIcon },
-  { id: 'database', label: 'Datenbank', icon: ServerIcon },
   { id: 'customModels', label: 'Custom Modell', icon: AdjustmentsHorizontalIcon },
   { id: 'personal', label: 'Persönliche Daten', icon: UserIcon },
   { id: 'observer', label: 'Observer', icon: ChartBarIcon },
   { id: 'agents', label: 'Agents', icon: SparklesIcon },
   { id: 'web-search', label: 'Web-Suche', icon: MagnifyingGlassIcon },
   { id: 'voice', label: 'Sprache', icon: MicrophoneIcon },
+  { id: 'addons', label: 'Erweiterungen', icon: PuzzlePieceIcon },
   { id: 'danger', label: 'Danger Zone', icon: ShieldExclamationIcon }
 ]
 
@@ -2762,6 +2142,7 @@ onMounted(async () => {
   await loadWebSearchSettings()
   await loadFileSearchStatus()
   await loadVoiceAssistantSettings()
+  await loadTesseractStatus()
 })
 
 // Schriftgröße setzen und persistieren (stufenlos)
@@ -2846,7 +2227,8 @@ async function loadMateModels() {
 }
 
 // Einzelne Modell-Speicher-Funktionen (um Race Conditions zu vermeiden)
-async function saveEmailModel() {
+async function saveEmailModel(model = null) {
+  if (model !== null) mateModels.value.emailModel = model
   try {
     await fetch('/api/settings/email-model', {
       method: 'POST',
@@ -2860,7 +2242,8 @@ async function saveEmailModel() {
   }
 }
 
-async function saveDocumentModel() {
+async function saveDocumentModel(model = null) {
+  if (model !== null) mateModels.value.documentModel = model
   try {
     await fetch('/api/settings/document-model', {
       method: 'POST',
@@ -2874,7 +2257,8 @@ async function saveDocumentModel() {
   }
 }
 
-async function saveLogAnalysisModel() {
+async function saveLogAnalysisModel(model = null) {
+  if (model !== null) mateModels.value.logAnalysisModel = model
   try {
     await fetch('/api/settings/log-analysis-model', {
       method: 'POST',
@@ -2888,7 +2272,8 @@ async function saveLogAnalysisModel() {
   }
 }
 
-async function saveCoderModel() {
+async function saveCoderModel(model = null) {
+  if (model !== null) mateModels.value.coderModel = model
   try {
     await fetch('/api/settings/coder-model', {
       method: 'POST',

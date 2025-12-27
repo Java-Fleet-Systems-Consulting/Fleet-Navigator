@@ -116,7 +116,10 @@
     "download": "İndir",
     "upload": "Yükle",
     "install": "Kur",
+    "installed": "Kurulu",
+    "notInstalled": "Kurulu değil",
     "uninstall": "Kaldır",
+    "downloading": "İndiriliyor...",
     "close": "Kapat",
     "open": "Aç",
     "yes": "Evet",
@@ -569,6 +572,17 @@
       "noCloud": "Bulut bağlantısı gerekli değil",
       "deleteData": "Tüm verileri sil",
       "deleteDataDesc": "Tüm yerel verileri kalıcı olarak siler"
+    },
+    "addons": {
+      "title": "Eklentiler",
+      "description": "Genişletilmiş işlevsellik için opsiyonel bileşenler",
+      "info": "Eklentiler ~/.fleet-navigator/ dizininde saklanır ve her zaman yüklenebilir.",
+      "tesseract": {
+        "description": "Görüntülerden ve taranmış belgelerden metin çıkarmayı sağlar. Sözleşmeler, faturalar ve diğer belgeler için idealdir.",
+        "languages": "Diller",
+        "download": "Tesseract'ı Yükle",
+        "ready": "Tesseract kullanıma hazır"
+      }
     },
     "danger": {
       "title": "TEHLİKE BÖLGESİ",

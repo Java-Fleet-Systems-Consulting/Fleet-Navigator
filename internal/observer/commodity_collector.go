@@ -122,7 +122,7 @@ func (c *CommodityCollector) Collect(ctx context.Context, indicators []Indicator
 		body, _ := io.ReadAll(resp.Body)
 		result.Success = false
 		result.ErrorMessage = fmt.Sprintf("API-Fehler %d: %s", resp.StatusCode, string(body))
-		return result, fmt.Errorf(result.ErrorMessage)
+		return result, fmt.Errorf("%s", result.ErrorMessage)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -229,7 +229,7 @@ func (c *CommodityCollector) CollectHistorical(ctx context.Context, indicator In
 	if !ok {
 		result.Success = false
 		result.ErrorMessage = fmt.Sprintf("Unbekannter Indikator: %s", indicator.Code)
-		return result, fmt.Errorf(result.ErrorMessage)
+		return result, fmt.Errorf("%s", result.ErrorMessage)
 	}
 
 	// EUR/USD historisch für Umrechnung
@@ -259,7 +259,7 @@ func (c *CommodityCollector) CollectHistorical(ctx context.Context, indicator In
 		body, _ := io.ReadAll(resp.Body)
 		result.Success = false
 		result.ErrorMessage = fmt.Sprintf("API-Fehler %d: %s", resp.StatusCode, string(body))
-		return result, fmt.Errorf(result.ErrorMessage)
+		return result, fmt.Errorf("%s", result.ErrorMessage)
 	}
 
 	body, _ := io.ReadAll(resp.Body)

@@ -144,7 +144,7 @@ func (c *StockCollector) Collect(ctx context.Context, indicators []Indicator) (*
 		body, _ := io.ReadAll(resp.Body)
 		result.Success = false
 		result.ErrorMessage = fmt.Sprintf("API-Fehler %d: %s", resp.StatusCode, string(body))
-		return result, fmt.Errorf(result.ErrorMessage)
+		return result, fmt.Errorf("%s", result.ErrorMessage)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -207,7 +207,7 @@ func (c *StockCollector) CollectHistorical(ctx context.Context, indicator Indica
 	if !ok {
 		result.Success = false
 		result.ErrorMessage = fmt.Sprintf("Unbekannter Indikator: %s", indicator.Code)
-		return result, fmt.Errorf(result.ErrorMessage)
+		return result, fmt.Errorf("%s", result.ErrorMessage)
 	}
 
 	url := fmt.Sprintf("%s/v8/finance/chart/%s?period1=%d&period2=%d&interval=1d",
@@ -234,7 +234,7 @@ func (c *StockCollector) CollectHistorical(ctx context.Context, indicator Indica
 		body, _ := io.ReadAll(resp.Body)
 		result.Success = false
 		result.ErrorMessage = fmt.Sprintf("API-Fehler %d: %s", resp.StatusCode, string(body))
-		return result, fmt.Errorf(result.ErrorMessage)
+		return result, fmt.Errorf("%s", result.ErrorMessage)
 	}
 
 	body, _ := io.ReadAll(resp.Body)

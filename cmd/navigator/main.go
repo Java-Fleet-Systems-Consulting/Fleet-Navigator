@@ -380,7 +380,9 @@ Bei rechtlichen Fragen weise darauf hin, dass du nur allgemeine Informationen ge
 	// Downloader für Setup-Wizard
 	setupHandler.SetModelDownloader(setup.NewHuggingFaceDownloader(config.ModelsDir))
 	setupHandler.SetVisionDownloader(setup.NewVisionModelDownloader(config.ModelsDir))
-	setupHandler.SetVoiceDownloader(setup.NewVoiceModelDownloader(config.DataDir))
+	voiceDownloader := setup.NewVoiceModelDownloader(config.DataDir)
+	setupHandler.SetVoiceDownloader(voiceDownloader)
+	setupHandler.SetTesseractDownloader(voiceDownloader) // VoiceModelDownloader implementiert auch TesseractDownloader
 	log.Printf("Setup-Wizard initialisiert (DataDir: %s, ModelsDir: %s)", config.DataDir, config.ModelsDir)
 
 	// Provider-abhängige Statusmeldungen
@@ -10000,16 +10002,19 @@ func (app *App) handleVoiceSTT(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Format aus Dateiname extrahieren
+	// Format aus Dateiname extrahieren (mit Validierung)
 	format := "webm" // Default
 	if ext := filepath.Ext(header.Filename); ext != "" {
-		format = strings.TrimPrefix(ext, ".")
+		format = security.ValidateAudioFormat(strings.TrimPrefix(ext, "."))
 	}
 
-	// Optional: Format aus Form-Feld
+	// Optional: Format aus Form-Feld (mit Validierung gegen Path Traversal)
 	if f := r.FormValue("format"); f != "" {
 		format = f
 	}
+
+	// Sicherheits-Validierung: Nur erlaubte Audio-Formate akzeptieren
+	format = security.ValidateAudioFormat(format)
 
 	log.Printf("STT-Anfrage: %d bytes, Format: %s", len(audioData), format)
 

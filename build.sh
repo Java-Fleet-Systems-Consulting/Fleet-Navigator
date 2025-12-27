@@ -24,8 +24,10 @@ if [ -d "web" ] && [ -f "web/package.json" ]; then
     cd web
     # WICHTIG: Vite Cache löschen um alte Dateien zu vermeiden!
     rm -rf node_modules/.vite
-    npm install --silent
-    npm run build
+    # --no-bin-links für NTFS/Windows-Partitionen (keine Symlinks möglich)
+    npm install --silent --no-bin-links
+    # vite direkt aufrufen (wegen --no-bin-links keine .bin/vite Symlinks)
+    node node_modules/vite/bin/vite.js build
     # Frontend-Build-Zeit erfassen (nach erfolgreichem Build)
     FRONTEND_BUILD_TIME=$(date '+%Y-%m-%d %H:%M:%S')
     cd ..

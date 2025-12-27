@@ -116,7 +116,10 @@
     "download": "Download",
     "upload": "Upload",
     "install": "Install",
+    "installed": "Installed",
+    "notInstalled": "Not installed",
     "uninstall": "Uninstall",
+    "downloading": "Downloading...",
     "close": "Close",
     "open": "Open",
     "yes": "Yes",
@@ -569,6 +572,17 @@
       "noCloud": "No cloud connection required",
       "deleteData": "Delete all data",
       "deleteDataDesc": "Permanently deletes all local data"
+    },
+    "addons": {
+      "title": "Add-ons",
+      "description": "Optional components for extended functionality",
+      "info": "Add-ons are stored in ~/.fleet-navigator/ and can be installed at any time.",
+      "tesseract": {
+        "description": "Enables text extraction from images and scanned documents. Ideal for contracts, invoices and other documents.",
+        "languages": "Languages",
+        "download": "Install Tesseract",
+        "ready": "Tesseract is ready to use"
+      }
     },
     "danger": {
       "title": "DANGER ZONE",

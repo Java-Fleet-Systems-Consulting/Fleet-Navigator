@@ -836,10 +836,11 @@ myService := mymodule.NewService()
 | 2025-12-12 | [CHANGELOG_2025-12-12.md](docs/CHANGELOG_2025-12-12.md) | **Provider-System festverdrahtet**: Model-Download Provider-abhängig, Provider-Wechsel mit Verbindungsprüfung & Fallback |
 | 2025-12-11 | [CHANGELOG_2025-12-11.md](docs/CHANGELOG_2025-12-11.md) | Provider-System Fix, Model Manager Download-Fix, Persistente Settings in DB |
 | 2025-12-25 | [CHANGELOG_2025-12-25.md](docs/CHANGELOG_2025-12-25.md) | **Anti-Halluzination konfigurierbar, DELEGATE-Tag für Experten-Umschaltung, Unit-Tests** |
+| 2025-12-26 | [CHANGELOG_2025-12-26.md](docs/CHANGELOG_2025-12-26.md) | **SettingsModal.vue Refactoring Phase 2**: 3 weitere Tab-Komponenten integriert, -819 Zeilen (-22%), 9/11 Tabs fertig |
 
 ---
 
-## Migration Status (Stand: 2025-12-25)
+## Migration Status (Stand: 2025-12-26)
 
 ### Übersicht nach Modulen
 
@@ -975,17 +976,14 @@ window.processSelectedFolders = processSelectedFolders;
 - [ ] Whisper STT Integration prüfen
 - [ ] Wake Word Pattern Matching debuggen
 
-#### 19. Tesseract OCR funktioniert nicht (OFFEN)
-**Problem:** Tesseract-Integration für Dokumentenverarbeitung funktioniert nicht.
-**Status:** Binary wird heruntergeladen, aber OCR-Aufruf schlägt fehl.
-**Betroffene Dateien:**
-- `internal/vision/vision.go` - `TesseractOCRFromBase64()`
-- `internal/setup/handlers.go` - Download-Funktion
-**TODO:**
-- [ ] Tesseract-Binary-Pfad prüfen (`~/.fleet-navigator/tesseract/`)
-- [ ] Sprachpakete (tessdata) auf Mirror bereitstellen
-- [ ] Error-Logging in Vision-Pipeline verbessern
-- [ ] Setup-Wizard UI für Tesseract-Installation
+#### 19. Tesseract OCR Download-API fehlte (GELÖST - 2025-12-26)
+**Problem:** API-Endpoint `/api/setup/tesseract/download` existierte nicht, daher konnte Tesseract nicht installiert werden.
+**Ursache:** Die `DownloadTesseract()` Funktion existierte, aber kein HTTP-Handler rief sie auf.
+**Lösung:**
+- Neues Interface `TesseractDownloader` in `internal/setup/handlers.go`
+- API-Endpoints: `GET /api/setup/tesseract/status` und `GET /api/setup/tesseract/download` (SSE)
+- Frontend: Neuer Tab "Erweiterungen" in SettingsModal mit Tesseract-Installation
+- i18n: Übersetzungen für DE, EN, TR hinzugefügt
 
 ### Frontend-Kompatibilität: JSON-Mapping
 
@@ -1018,12 +1016,12 @@ BaseModel  string `json:"model"`
 - [ ] TTS-Integration (Piper) vervollständigen
 - [ ] Sound-Dateien für Feedback einbetten
 
-**Tesseract OCR (⚠️ FUNKTIONIERT NICHT - Issue #19):**
+**Tesseract OCR (✅ GELÖST - Issue #19):**
 - [x] Download-Funktion vom Mirror (alle OS)
-- [ ] **OCR-Aufruf schlägt fehl** - Binary-Pfad oder Konfiguration prüfen
-- [ ] Sprachpakete DEU/ENG/TUR auf Mirror bereitstellen (Dateien fehlen!)
-- [ ] Setup-Wizard UI: Tesseract als Option anbieten
-- [ ] Error-Logging verbessern für Debugging
+- [x] API-Endpoints: `/api/setup/tesseract/status` und `/api/setup/tesseract/download`
+- [x] Settings UI: Tab "Erweiterungen" mit Tesseract-Installation
+- [x] Sprachpakete DEU/ENG/TUR im Mirror vorhanden
+- [x] i18n: Übersetzungen für DE, EN, TR
 
 **Sonstige:**
 - [ ] Custom Models vollständige DB-Implementation

@@ -10,7 +10,10 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
+
+	"fleet-navigator/internal/security"
 )
 
 // Handlers enthält die HTTP-Handler für Observer-Endpoints
@@ -416,27 +419,37 @@ func (h *Handlers) handleImport(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	// Temporäre Datei erstellen
-	tmpFile := filepath.Join(os.TempDir(), header.Filename)
-	out, err := os.Create(tmpFile)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	// Dateiendung validieren (nur .sql erlaubt)
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	if ext != ".sql" {
+		http.Error(w, "Unsupported file type. Use .sql", http.StatusBadRequest)
 		return
 	}
-	defer os.Remove(tmpFile)
 
-	if _, err := io.Copy(out, file); err != nil {
-		out.Close()
+	// Dateiname sanitizen für Logging (Path Traversal verhindern)
+	safeFilename := security.SanitizeFilename(header.Filename)
+	log.Printf("[Observer] Import: %s", safeFilename)
+
+	// Sichere temporäre Datei erstellen (system-generierter Name)
+	tmpFile, err := os.CreateTemp("", "observer-import-*.sql")
+	if err != nil {
+		http.Error(w, "Temp-Datei erstellen fehlgeschlagen", http.StatusInternalServerError)
+		return
+	}
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath)
+
+	if _, err := io.Copy(tmpFile, file); err != nil {
+		tmpFile.Close()
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	out.Close()
+	tmpFile.Close()
 
 	// Import basierend auf Dateityp
-	ext := filepath.Ext(header.Filename)
 	switch ext {
 	case ".sql":
-		if err := h.service.ImportDatabase(tmpFile); err != nil {
+		if err := h.service.ImportDatabase(tmpPath); err != nil {
 			http.Error(w, "Import failed: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
