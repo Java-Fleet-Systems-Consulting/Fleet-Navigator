@@ -837,10 +837,11 @@ myService := mymodule.NewService()
 | 2025-12-11 | [CHANGELOG_2025-12-11.md](docs/CHANGELOG_2025-12-11.md) | Provider-System Fix, Model Manager Download-Fix, Persistente Settings in DB |
 | 2025-12-25 | [CHANGELOG_2025-12-25.md](docs/CHANGELOG_2025-12-25.md) | **Anti-Halluzination konfigurierbar, DELEGATE-Tag für Experten-Umschaltung, Unit-Tests** |
 | 2025-12-26 | [CHANGELOG_2025-12-26.md](docs/CHANGELOG_2025-12-26.md) | **SettingsModal.vue Refactoring Phase 2**: 3 weitere Tab-Komponenten integriert, -819 Zeilen (-22%), 9/11 Tabs fertig |
+| 2025-12-27 | [CHANGELOG_2025-12-27.md](docs/CHANGELOG_2025-12-27.md) | **Model-Swap Fix, GitHub Actions repariert, SettingsModal Phase 3 fertig**: Race-Condition behoben, Workflow-Permissions, alle 11 Tabs modularisiert |
 
 ---
 
-## Migration Status (Stand: 2025-12-26)
+## Migration Status (Stand: 2025-12-27)
 
 ### Übersicht nach Modulen
 
