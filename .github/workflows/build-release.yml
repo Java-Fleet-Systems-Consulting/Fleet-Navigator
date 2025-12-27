@@ -134,7 +134,7 @@ jobs:
 
   # Schritt 1c: llama-server mit CUDA für Linux (optional, größer)
   build-llama-server-cuda:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04  # CUDA Toolkit braucht 22.04 (24.04 nicht unterstützt)
     steps:
       - name: Install CUDA Toolkit
         uses: Jimver/cuda-toolkit@v0.2.11
