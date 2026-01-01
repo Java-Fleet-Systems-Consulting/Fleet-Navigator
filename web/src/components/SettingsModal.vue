@@ -112,9 +112,12 @@
               :vision-models="visionModels"
               :file-search-folders="fileSearchFolders"
               :file-search-status="fileSearchStatus"
+              :vision-server-status="visionServerStatus"
+              :vision-idle-timeout="visionIdleTimeout"
               @update:settings="settings = $event"
               @update:model-selection-settings="modelSelectionSettings = $event"
               @update:web-search-think-first="webSearchThinkFirst = $event"
+              @update:vision-idle-timeout="saveVisionIdleTimeout"
               @add-folder="addSearchFolder"
               @remove-folder="removeSearchFolder"
               @reindex-folder="reindexFolder"
@@ -161,7 +164,12 @@
               :tesseract-downloading="tesseractDownloading"
               :tesseract-download-progress="tesseractDownloadProgress"
               :tesseract-download-message="tesseractDownloadMessage"
+              :vision-model-status="visionModelStatus"
+              :vision-downloading="visionDownloading"
+              :vision-download-progress="visionDownloadProgress"
+              :vision-download-message="visionDownloadMessage"
               @download-tesseract="downloadTesseract"
+              @download-vision="downloadVisionModel"
               @postgres-status-change="onPostgresStatusChange"
             />
           </div>
@@ -427,6 +435,15 @@ watch(activeTab, async (newTab, oldTab) => {
     await loadVoiceModels()
     await loadTtsSetting()
   }
+
+  if (newTab === 'agents') {
+    await loadVisionServerStatus()
+  }
+
+  if (newTab === 'addons') {
+    await loadTesseractStatus()
+    await loadVisionModelStatus()
+  }
 })
 
 // Sync cpuOnly with settingsStore (persistent) - für CPU-Only Mode Toggle
@@ -586,6 +603,104 @@ async function downloadTesseract() {
     tesseractDownloading.value = false
     tesseractDownloadMessage.value = 'Fehler: ' + err.message
     errorToast('Tesseract-Download fehlgeschlagen')
+  }
+}
+
+// ========================================
+// Vision Model Status & Download
+// ========================================
+
+const visionModelStatus = ref({
+  installed: false,
+  modelName: '',
+  modelPath: '',
+  mmprojPath: '',
+  modelSize: 0
+})
+const visionDownloading = ref(false)
+const visionDownloadProgress = ref(0)
+const visionDownloadMessage = ref('')
+
+async function loadVisionModelStatus() {
+  try {
+    const response = await fetch('/api/visionserver/status')
+    if (response.ok) {
+      const data = await response.json()
+      // Status mapping: wenn modelPath vorhanden ist, ist ein Modell installiert
+      visionModelStatus.value = {
+        installed: !!data.modelPath || data.running,
+        modelName: data.modelName || '',
+        modelPath: data.modelPath || '',
+        mmprojPath: data.mmprojPath || '',
+        modelSize: data.modelSize || 0
+      }
+    }
+  } catch (err) {
+    console.error('Failed to load Vision model status:', err)
+  }
+}
+
+async function downloadVisionModel() {
+  if (visionDownloading.value) return
+
+  visionDownloading.value = true
+  visionDownloadProgress.value = 0
+  visionDownloadMessage.value = 'Starte Vision-Download...'
+
+  try {
+    // MiniCPM-V-2.6 ist das Standard-Vision-Modell
+    const eventSource = new EventSource('/api/setup/download-vision?modelId=minicpm-v-2.6')
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+
+        if (data.status === 'complete' || data.done) {
+          eventSource.close()
+          visionDownloading.value = false
+          visionDownloadProgress.value = 100
+          visionDownloadMessage.value = 'Installation abgeschlossen!'
+          success('Vision-Modell erfolgreich installiert!')
+          // Status neu laden
+          loadVisionModelStatus()
+          loadVisionServerStatus()
+          return
+        }
+
+        if (data.error) {
+          eventSource.close()
+          visionDownloading.value = false
+          visionDownloadMessage.value = 'Fehler: ' + data.error
+          errorToast('Vision-Installation fehlgeschlagen: ' + data.error)
+          return
+        }
+
+        visionDownloadProgress.value = data.percent || 0
+        visionDownloadMessage.value = data.message || 'Downloading...'
+      } catch (e) {
+        console.error('Error parsing SSE:', e)
+      }
+    }
+
+    eventSource.onerror = (error) => {
+      console.error('Vision SSE Error:', error)
+      eventSource.close()
+      visionDownloading.value = false
+      // Prüfe ob Download erfolgreich war
+      if (visionDownloadProgress.value >= 99) {
+        success('Vision-Modell erfolgreich installiert!')
+        loadVisionModelStatus()
+        loadVisionServerStatus()
+      } else {
+        visionDownloadMessage.value = 'Verbindungsfehler'
+        errorToast('Vision-Download-Verbindung unterbrochen')
+      }
+    }
+  } catch (err) {
+    console.error('Failed to download Vision model:', err)
+    visionDownloading.value = false
+    visionDownloadMessage.value = 'Fehler: ' + err.message
+    errorToast('Vision-Download fehlgeschlagen')
   }
 }
 
@@ -798,6 +913,32 @@ watch(webSearchThinkFirst, (newValue) => {
 
 // Load on component mount
 loadThinkFirstSetting()
+
+// Vision Server Status & Timeout
+const visionServerStatus = ref(null)
+const visionIdleTimeout = ref(300) // 5 Minuten Default
+
+async function loadVisionServerStatus() {
+  try {
+    const status = await api.getVisionServerStatus()
+    visionServerStatus.value = status
+    if (status.idleTimeoutSeconds) {
+      visionIdleTimeout.value = status.idleTimeoutSeconds
+    }
+  } catch (e) {
+    console.error('Failed to load Vision Server status:', e)
+  }
+}
+
+async function saveVisionIdleTimeout(timeout) {
+  try {
+    await api.post('/visionserver/configure', { idleTimeoutSeconds: timeout })
+    visionIdleTimeout.value = timeout
+    console.log('💾 Vision Server Timeout saved:', timeout, 'seconds')
+  } catch (e) {
+    console.error('Failed to save Vision Server timeout:', e)
+  }
+}
 
 // Fleet Mates Model Settings
 const mateModels = ref({

@@ -92,6 +92,87 @@
       </div>
     </div>
 
+    <!-- Vision Model (MiniCPM-V / LLaVA) -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-4">
+      <div class="flex items-start gap-4">
+        <!-- Icon -->
+        <div class="p-3 rounded-xl bg-purple-100 dark:bg-purple-900/30">
+          <EyeIcon class="w-8 h-8 text-purple-600 dark:text-purple-400" />
+        </div>
+
+        <!-- Content -->
+        <div class="flex-1">
+          <div class="flex items-center gap-2 mb-1">
+            <h4 class="font-semibold text-gray-900 dark:text-white">{{ $t('settings.addons.visionModel.title') || 'Vision-Modell' }}</h4>
+            <span
+              v-if="visionModelStatus.installed"
+              class="px-2 py-0.5 text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-full"
+            >
+              {{ $t('common.installed') || 'Installiert' }}
+            </span>
+            <span
+              v-else
+              class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 rounded-full"
+            >
+              {{ $t('common.notInstalled') || 'Nicht installiert' }}
+            </span>
+          </div>
+          <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
+            {{ $t('settings.addons.visionModel.description') || 'Ermöglicht Bildanalyse und Screenshot-Verarbeitung. Benötigt für Vision-Chaining.' }}
+          </p>
+
+          <!-- Installiertes Modell -->
+          <div v-if="visionModelStatus.installed && visionModelStatus.modelName" class="mb-3">
+            <span class="text-xs font-medium text-gray-500 dark:text-gray-400">
+              {{ $t('settings.addons.visionModel.model') || 'Modell' }}:
+            </span>
+            <span class="ml-2 px-2 py-0.5 text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 rounded">
+              {{ visionModelStatus.modelName }}
+            </span>
+            <span class="ml-2 text-xs text-gray-500">
+              ({{ formatFileSize(visionModelStatus.modelSize) }})
+            </span>
+          </div>
+
+          <!-- Download Progress -->
+          <div v-if="visionDownloading" class="mb-3">
+            <div class="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
+              <span>{{ visionDownloadMessage }}</span>
+              <span>{{ visionDownloadProgress }}%</span>
+            </div>
+            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+              <div
+                class="bg-purple-500 h-2 rounded-full transition-all duration-300"
+                :style="{ width: visionDownloadProgress + '%' }"
+              ></div>
+            </div>
+          </div>
+
+          <!-- Action Button -->
+          <button
+            v-if="!visionModelStatus.installed && !visionDownloading"
+            @click="$emit('download-vision')"
+            class="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+          >
+            <ArrowDownTrayIcon class="w-4 h-4" />
+            {{ $t('settings.addons.visionModel.download') || 'MiniCPM-V installieren (5.4 GB)' }}
+          </button>
+          <button
+            v-else-if="visionDownloading"
+            disabled
+            class="px-4 py-2 bg-gray-400 text-white rounded-lg text-sm font-medium cursor-not-allowed flex items-center gap-2"
+          >
+            <ArrowPathIcon class="w-4 h-4 animate-spin" />
+            {{ $t('common.downloading') || 'Wird heruntergeladen...' }}
+          </button>
+          <div v-else class="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+            <CheckCircleIcon class="w-5 h-5" />
+            {{ $t('settings.addons.visionModel.ready') || 'Vision-Modell ist einsatzbereit' }}
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- PostgreSQL Migration -->
     <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-4">
       <PostgreSQLMigration @status-change="onPostgresStatusChange" />
@@ -116,7 +197,8 @@ import {
   ArrowDownTrayIcon,
   ArrowPathIcon,
   CheckCircleIcon,
-  InformationCircleIcon
+  InformationCircleIcon,
+  EyeIcon
 } from '@heroicons/vue/24/outline'
 import PostgreSQLMigration from './PostgreSQLMigration.vue'
 
@@ -141,10 +223,41 @@ const props = defineProps({
   tesseractDownloadMessage: {
     type: String,
     default: ''
+  },
+  // Vision Model props
+  visionModelStatus: {
+    type: Object,
+    default: () => ({
+      installed: false,
+      modelName: '',
+      modelPath: '',
+      mmprojPath: '',
+      modelSize: 0
+    })
+  },
+  visionDownloading: {
+    type: Boolean,
+    default: false
+  },
+  visionDownloadProgress: {
+    type: Number,
+    default: 0
+  },
+  visionDownloadMessage: {
+    type: String,
+    default: ''
   }
 })
 
-const emit = defineEmits(['download-tesseract', 'postgres-status-change'])
+const emit = defineEmits(['download-tesseract', 'download-vision', 'postgres-status-change'])
+
+// Helper function
+function formatFileSize(bytes) {
+  if (!bytes || bytes === 0) return '0 B'
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(1024))
+  return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + sizes[i]
+}
 
 function onPostgresStatusChange(connected) {
   emit('postgres-status-change', connected)

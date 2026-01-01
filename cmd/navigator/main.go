@@ -104,9 +104,10 @@ type App struct {
 	settingsService     *settings.Service     // App Settings Service
 	userService         *user.Service         // User & Auth Service
 	customModelService  *custommodel.Service  // Custom Models Service
-	llamaServer         *llamaserver.Server   // llama.cpp Server Manager
-	selectedModel       string                // Aktuell ausgewähltes Modell für UI
-	hardwareMonitor     *hardware.Monitor     // Hardware Monitor (CPU, GPU, RAM)
+	llamaServer         *llamaserver.Server       // llama.cpp Server Manager (Chat)
+	visionServer        *llamaserver.VisionServer // Separater Vision-Server (On-Demand)
+	selectedModel       string                    // Aktuell ausgewähltes Modell für UI
+	hardwareMonitor     *hardware.Monitor         // Hardware Monitor (CPU, GPU, RAM)
 	searchService       *search.Service       // Web Search Service (Brave, SearXNG, DuckDuckGo)
 	voiceService        *voice.Service        // Voice Service (Whisper STT, Piper TTS)
 	setupService        *setup.Service        // Setup Wizard Service
@@ -219,6 +220,7 @@ Bei rechtlichen Fragen weise darauf hin, dass du nur allgemeine Informationen ge
 		OllamaURL:       config.OllamaURL,
 		DefaultModel:    config.OllamaModel,
 		SystemPrompt:    systemPrompt,
+		ModelsDir:       config.ModelsDir, // Fuer direktes Loeschen ohne Provider
 		SkipOllamaCheck: activeProvider != "ollama", // Nur prüfen wenn Ollama aktiv
 	}
 	modelService := llm.NewModelService(modelServiceConfig)
@@ -273,9 +275,75 @@ Bei rechtlichen Fragen weise darauf hin, dass du nur allgemeine Informationen ge
 	}
 	customModelService := custommodel.NewService(customModelRepo)
 
-	// llama-server Manager
+	// === GPU-ERKENNUNG UND STRATEGIE ===
+	gpuInfo := hardware.DetectGPUs()
+	gpuSettings := settingsService.GetGPUSettings()
+
+	// Strategie nur bei AutoDetect oder erstem Start berechnen
+	var gpuAssignment *hardware.ServerAssignment
+	if gpuSettings.AutoDetect || gpuSettings.LastDetect == "" {
+		// Modell-Anforderungen schätzen (Standard-Werte)
+		chatReq := hardware.ModelRequirements{
+			Name:       "Qwen2.5-7B-Instruct-Q4_K_M",
+			Parameters: 7.0,
+			Quant:      "q4_k_m",
+			EstVRAM:    hardware.EstimateModelVRAM(7.0, "q4_k_m"),
+		}
+		visionReq := hardware.ModelRequirements{
+			Name:       "MiniCPM-V-2.6-Q4_K_M",
+			Parameters: 8.0,
+			Quant:      "q4_k_m",
+			EstVRAM:    hardware.EstimateModelVRAM(8.0, "q4_k_m"),
+		}
+
+		gpuAssignment = hardware.DetermineStrategy(gpuInfo, chatReq, visionReq)
+		hardware.PrintStrategyReport(gpuInfo, gpuAssignment)
+
+		// Strategie in Settings speichern
+		if gpuAssignment != nil {
+			chatGPUID := -1
+			chatBackend := "cpu"
+			chatGPUName := ""
+			if gpuAssignment.ChatGPU != nil {
+				chatGPUID = gpuAssignment.ChatGPU.ID
+				chatBackend = gpuAssignment.ChatBackend
+				chatGPUName = gpuAssignment.ChatGPU.Name
+			}
+
+			visionGPUID := -1
+			visionBackend := "cpu"
+			visionGPUName := ""
+			if gpuAssignment.VisionGPU != nil {
+				visionGPUID = gpuAssignment.VisionGPU.ID
+				visionBackend = gpuAssignment.VisionBackend
+				visionGPUName = gpuAssignment.VisionGPU.Name
+			}
+
+			if err := settingsService.SaveGPUAssignmentFromDetection(
+				chatGPUID, chatBackend, gpuAssignment.ChatGPULayers, chatGPUName,
+				visionGPUID, visionBackend, gpuAssignment.VisionGPULayers, visionGPUName,
+				gpuAssignment.Strategy,
+			); err != nil {
+				log.Printf("WARNUNG: GPU-Settings konnten nicht gespeichert werden: %v", err)
+			}
+			// Settings neu laden
+			gpuSettings = settingsService.GetGPUSettings()
+		}
+	}
+
+	// llama-server Manager mit GPU-Settings konfigurieren
 	llamaConfig := llamaserver.DefaultConfig(config.DataDir)
 	llamaConfig.Port = 2026 // llama-server läuft auf Port 2026
+
+	// GPU-Zuweisung für Chat-Server anwenden
+	if gpuSettings.ChatGPU.GPUID >= 0 {
+		llamaConfig.MainGPU = gpuSettings.ChatGPU.GPUID
+		llamaConfig.Backend = gpuSettings.ChatGPU.Backend
+		llamaConfig.GPULayers = gpuSettings.ChatGPU.GPULayers
+		log.Printf("🎮 Chat-Server: GPU #%d (%s), Backend: %s",
+			gpuSettings.ChatGPU.GPUID, gpuSettings.ChatGPU.GPUName, gpuSettings.ChatGPU.Backend)
+	}
+
 	llamaSrv := llamaserver.NewServer(llamaConfig)
 
 	// Unvollständige Downloads bereinigen (abgebrochene Downloads löschen)
@@ -289,24 +357,49 @@ Bei rechtlichen Fragen weise darauf hin, dass du nur allgemeine Informationen ge
 	if len(models) > 0 && llamaConfig.BinaryPath != "" {
 		// Standard-Modell suchen (Qwen2.5-7B bevorzugt)
 		var defaultModel string
+		var fallbackModel string
 		for _, m := range models {
-			if strings.Contains(strings.ToLower(m.Name), "qwen2.5-7b") {
+			nameLower := strings.ToLower(m.Name)
+
+			// Vision-Modelle für Chat-Server überspringen (gehören zum Vision-Server)
+			if strings.Contains(nameLower, "llava") || strings.Contains(nameLower, "minicpm") ||
+			   strings.Contains(nameLower, "vision") || strings.Contains(nameLower, "mmproj") {
+				continue
+			}
+
+			// Qwen2.5-7B bevorzugen
+			if strings.Contains(nameLower, "qwen2.5-7b") {
 				defaultModel = m.Path
 				break
 			}
+			// Erstes Nicht-Vision-Modell als Fallback merken
+			if fallbackModel == "" {
+				fallbackModel = m.Path
+			}
 		}
-		// Falls kein Qwen, erstes verfügbares Modell nehmen
+		// Falls kein Qwen, erstes nicht-Vision Modell nehmen
 		if defaultModel == "" {
-			defaultModel = models[0].Path
+			defaultModel = fallbackModel
 		}
 
-		log.Printf("Starte llama-server mit Modell: %s", defaultModel)
-		if err := llamaSrv.Start(defaultModel); err != nil {
-			log.Printf("WARNUNG: llama-server konnte nicht gestartet werden: %v", err)
+		// Falls nur Vision-Modelle vorhanden, diese als Fallback verwenden (mit Warnung)
+		if defaultModel == "" && len(models) > 0 {
+			defaultModel = models[0].Path
+			log.Printf("⚠️ Nur Vision-Modelle gefunden - verwende %s als Chat-Modell (nicht optimal)", models[0].Name)
+			log.Printf("💡 Empfehlung: Lade ein Chat-Modell wie Qwen2.5 oder Gemma herunter")
+		}
+
+		if defaultModel == "" {
+			log.Printf("⚠️ Kein Modell für Chat gefunden - Server wird nicht gestartet")
 		} else {
-			// Watchdog aktivieren für automatischen Neustart bei Crash
-			if err := llamaSrv.EnableWatchdog(); err != nil {
-				log.Printf("WARNUNG: Watchdog konnte nicht aktiviert werden: %v", err)
+			log.Printf("Starte llama-server mit Modell: %s", defaultModel)
+			if err := llamaSrv.Start(defaultModel); err != nil {
+				log.Printf("WARNUNG: llama-server konnte nicht gestartet werden: %v", err)
+			} else {
+				// Watchdog aktivieren für automatischen Neustart bei Crash
+				if err := llamaSrv.EnableWatchdog(); err != nil {
+					log.Printf("WARNUNG: Watchdog konnte nicht aktiviert werden: %v", err)
+				}
 			}
 		}
 	} else if llamaConfig.BinaryPath == "" {
@@ -321,6 +414,109 @@ Bei rechtlichen Fragen weise darauf hin, dass du nur allgemeine Informationen ge
 	// Setup Service erstellen
 	setupSvc := setup.NewService(config.DataDir)
 	setupHandler := setup.NewAPIHandler(setupSvc)
+
+	// Vision-Server Manager (On-Demand für Bildanalyse auf Port 2024)
+	visionServerConfig := llamaserver.DefaultVisionServerConfig(config.DataDir)
+	// Vision-Settings aus DB laden falls vorhanden
+	visionSettings := settingsService.GetVisionSettings()
+	if visionSettings.ModelPath != "" {
+		visionServerConfig.ModelPath = visionSettings.ModelPath
+		visionServerConfig.MmprojPath = visionSettings.MmprojPath
+		log.Printf("Vision-Server konfiguriert (aus Settings): %s", filepath.Base(visionSettings.ModelPath))
+	} else {
+		// Auto-Detection: Vision-Modell suchen wenn nicht in Settings konfiguriert
+		log.Printf("🔍 Suche Vision-Modell für Vision-Server...")
+		visionDir := filepath.Join(config.DataDir, "models", "vision")
+		if entries, err := os.ReadDir(visionDir); err == nil {
+			var foundModel, foundMmproj string
+			for _, entry := range entries {
+				if entry.IsDir() {
+					continue
+				}
+				name := strings.ToLower(entry.Name())
+				if !strings.HasSuffix(name, ".gguf") {
+					continue
+				}
+				if strings.Contains(name, "mmproj") {
+					foundMmproj = filepath.Join(visionDir, entry.Name())
+					log.Printf("👁️ mmproj gefunden: %s", entry.Name())
+				} else if strings.Contains(name, "llava") || strings.Contains(name, "minicpm") || strings.Contains(name, "vision") {
+					foundModel = filepath.Join(visionDir, entry.Name())
+					log.Printf("👁️ Vision-Modell gefunden: %s", entry.Name())
+				}
+			}
+			if foundModel != "" {
+				visionServerConfig.ModelPath = foundModel
+				visionServerConfig.MmprojPath = foundMmproj
+				log.Printf("✅ Vision-Server auto-konfiguriert: %s", filepath.Base(foundModel))
+				// Settings aktualisieren für nächsten Start
+				settingsService.SaveVisionSettingsSimple(true, foundModel, foundMmproj)
+			}
+		}
+		// Auch im allgemeinen models-Verzeichnis suchen
+		if visionServerConfig.ModelPath == "" {
+			modelsDir := filepath.Join(config.DataDir, "models")
+			if entries, err := os.ReadDir(modelsDir); err == nil {
+				var foundModel, foundMmproj string
+				for _, entry := range entries {
+					if entry.IsDir() {
+						continue
+					}
+					name := strings.ToLower(entry.Name())
+					if !strings.HasSuffix(name, ".gguf") {
+						continue
+					}
+					if strings.Contains(name, "mmproj") {
+						foundMmproj = filepath.Join(modelsDir, entry.Name())
+					} else if strings.Contains(name, "llava") || strings.Contains(name, "minicpm") || strings.Contains(name, "vision") {
+						foundModel = filepath.Join(modelsDir, entry.Name())
+					}
+				}
+				if foundModel != "" {
+					visionServerConfig.ModelPath = foundModel
+					visionServerConfig.MmprojPath = foundMmproj
+					log.Printf("✅ Vision-Server auto-konfiguriert (models/): %s", filepath.Base(foundModel))
+					settingsService.SaveVisionSettingsSimple(true, foundModel, foundMmproj)
+				}
+			}
+		}
+		if visionServerConfig.ModelPath == "" {
+			log.Printf("⚠️ Kein Vision-Modell gefunden - Vision-Chaining deaktiviert")
+		}
+	}
+	// Idle-Timeout aus Settings (Default: 5 Min)
+	// Bei AutoStart: Kein Timeout (Server läuft dauerhaft)
+	if visionSettings.AutoStart {
+		visionServerConfig.IdleTimeout = -1 // Kein Timeout
+		log.Printf("🖼️ Vision-Server AutoStart aktiviert - kein Idle-Timeout")
+	} else if visionSettings.IdleTimeout > 0 {
+		visionServerConfig.IdleTimeout = time.Duration(visionSettings.IdleTimeout) * time.Second
+	} else if visionSettings.IdleTimeout == -1 {
+		visionServerConfig.IdleTimeout = -1 // Explizit deaktiviert
+	}
+	// GPU-Layers aus Settings (Default: 99 = alle auf GPU, 0 = CPU/RAM)
+	if visionSettings.GPULayers >= 0 {
+		visionServerConfig.GPULayers = visionSettings.GPULayers
+		if visionSettings.GPULayers == 0 {
+			log.Printf("🧠 Vision-Server im CPU-Modus (RAM) - kann parallel zum Chat-Server laufen")
+		} else {
+			log.Printf("🎮 Vision-Server im GPU-Modus (%d Layer)", visionSettings.GPULayers)
+		}
+	}
+
+	// Multi-GPU: Vision-Server GPU-Zuweisung aus GPU-Settings (falls unterschiedlich vom Chat-Server)
+	if gpuSettings.VisionGPU.GPUID >= 0 {
+		visionServerConfig.MainGPU = gpuSettings.VisionGPU.GPUID
+		visionServerConfig.Backend = gpuSettings.VisionGPU.Backend
+		if gpuSettings.VisionGPU.GPULayers > 0 {
+			visionServerConfig.GPULayers = gpuSettings.VisionGPU.GPULayers
+		}
+		log.Printf("🖼️ Vision-Server: GPU #%d (%s), Backend: %s",
+			gpuSettings.VisionGPU.GPUID, gpuSettings.VisionGPU.GPUName, gpuSettings.VisionGPU.Backend)
+	}
+
+	visionSrv := llamaserver.NewVisionServer(visionServerConfig)
+	log.Printf("Vision-Server Manager initialisiert (Port %d, Timeout: %v)", visionServerConfig.Port, visionServerConfig.IdleTimeout)
 
 	app := &App{
 		config:           config,
@@ -339,6 +535,7 @@ Bei rechtlichen Fragen weise darauf hin, dass du nur allgemeine Informationen ge
 		userService:         userService,
 		customModelService:  customModelService,
 		llamaServer:         llamaSrv,
+		visionServer:        visionSrv,
 		selectedModel:       config.OllamaModel,
 		hardwareMonitor:     hwMonitor,
 		searchService:       search.NewService(),
@@ -418,6 +615,20 @@ Bei rechtlichen Fragen weise darauf hin, dass du nur allgemeine Informationen ge
 		} else {
 			log.Printf("llama-server wird beim ersten Chat-Request gestartet")
 		}
+	}
+
+	// Vision-Server AutoStart (wenn aktiviert)
+	if visionSettings.AutoStart && visionSettings.Enabled {
+		log.Printf("🖼️ Vision-Server AutoStart aktiviert - starte jetzt...")
+		go func() {
+			// Kurz warten bis App vollständig initialisiert
+			time.Sleep(2 * time.Second)
+			if err := visionSrv.Start(); err != nil {
+				log.Printf("⚠️ Vision-Server AutoStart fehlgeschlagen: %v", err)
+			} else {
+				log.Printf("✅ Vision-Server bereit (AutoStart)")
+			}
+		}()
 	}
 
 	return app, nil
@@ -576,6 +787,12 @@ func (app *App) Run() {
 	mux.HandleFunc("/api/llamaserver/vram/info", app.handleLlamaServerVRAMInfo)       // GET aktuelle VRAM-Info
 	mux.HandleFunc("/api/llamaserver/vram/clear", app.handleLlamaServerVRAMClear)     // POST VRAM manuell löschen
 
+	// Vision-Server Endpoints (separater llama-server für On-Demand Bildanalyse, Port 2024)
+	mux.HandleFunc("/api/visionserver/status", app.handleVisionServerStatus)    // GET Status
+	mux.HandleFunc("/api/visionserver/start", app.handleVisionServerStart)      // POST Starten
+	mux.HandleFunc("/api/visionserver/stop", app.handleVisionServerStop)        // POST Stoppen
+	mux.HandleFunc("/api/visionserver/configure", app.handleVisionServerConfig) // GET/POST Konfiguration
+
 	// Hardware Monitoring Endpoints (lokales System)
 	mux.HandleFunc("/api/hardware/stats", app.handleHardwareStats)           // GET alle Stats
 	mux.HandleFunc("/api/hardware/quick", app.handleHardwareQuickStats)      // GET schnelle Stats fuer TopBar
@@ -601,6 +818,10 @@ func (app *App) Run() {
 	mux.HandleFunc("/api/voice/config", app.handleVoiceConfig)                // Konfiguration
 	mux.HandleFunc("/api/voice-store/voices", app.handleVoiceStoreVoices)     // Alle Piper Voices von HuggingFace
 	mux.HandleFunc("/api/voice-assistant/settings", app.handleVoiceAssistantSettings) // Voice Assistant Einstellungen
+	mux.HandleFunc("/api/voice-assistant/status", app.handleVoiceAssistantStatus)     // Wake Word Status
+	mux.HandleFunc("/api/voice-assistant/start", app.handleVoiceAssistantStart)       // Wake Word starten
+	mux.HandleFunc("/api/voice-assistant/stop", app.handleVoiceAssistantStop)         // Wake Word stoppen
+	mux.HandleFunc("/api/voice-assistant/devices", app.handleVoiceAssistantDevices)   // Audio-Geräte
 
 	// User & Auth Endpoints
 	mux.HandleFunc("/api/auth/login", app.handleLogin)
@@ -1854,15 +2075,19 @@ func (app *App) handleChatSendStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		ChatID             int64   `json:"chatId"`
-		Message            string  `json:"message"`
-		Model              string  `json:"model"`
-		SystemPrompt       *string `json:"systemPrompt"`       // Optional: Custom System-Prompt vom Frontend
-		ExpertID           *int64  `json:"expertId"`           // Optional: Experte verwenden
-		ModeID             *int64  `json:"modeId"`             // Optional: Aktueller Modus
-		WebSearchEnabled   bool    `json:"webSearchEnabled"`   // Web-Suche aktivieren
-		WebSearchHideLinks bool    `json:"webSearchHideLinks"` // Quellen-Links NICHT anzeigen (nur RAG nutzen)
-		DocumentContext    string  `json:"documentContext"`    // Extrahierter Text aus hochgeladenen Dateien (PDF, TXT, etc.)
+		ChatID               int64    `json:"chatId"`
+		Message              string   `json:"message"`
+		Model                string   `json:"model"`
+		SystemPrompt         *string  `json:"systemPrompt"`         // Optional: Custom System-Prompt vom Frontend
+		ExpertID             *int64   `json:"expertId"`             // Optional: Experte verwenden
+		ModeID               *int64   `json:"modeId"`               // Optional: Aktueller Modus
+		WebSearchEnabled     bool     `json:"webSearchEnabled"`     // Web-Suche aktivieren
+		WebSearchHideLinks   bool     `json:"webSearchHideLinks"`   // Quellen-Links NICHT anzeigen (nur RAG nutzen)
+		DocumentContext      string   `json:"documentContext"`      // Extrahierter Text aus hochgeladenen Dateien (PDF, TXT, etc.)
+		Images               []string `json:"images"`               // Base64-kodierte Bilder für Vision
+		VisionChainEnabled   bool     `json:"visionChainEnabled"`   // Vision Chaining aktivieren
+		VisionModel          string   `json:"visionModel"`          // Vision-Modell für Chaining
+		ShowIntermediateOutput bool   `json:"showIntermediateOutput"` // Zwischenergebnisse anzeigen
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -1931,8 +2156,10 @@ func (app *App) handleChatSendStream(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Identitätsfrage erkannt - Web-Suche übersprungen: '%s'", req.Message)
 	}
 
-	// Web-Suche durchführen wenn aktiviert UND keine Identitätsfrage
-	if req.WebSearchEnabled && app.searchService != nil && !isIdentityQuestion {
+	// Web-Suche durchführen wenn aktiviert UND keine Identitätsfrage UND keine Bilder
+	// Bei Bildern soll die Vision-Analyse antworten, nicht Web-Suche
+	hasImages := len(req.Images) > 0
+	if req.WebSearchEnabled && app.searchService != nil && !isIdentityQuestion && !hasImages {
 		log.Printf("Web-Suche aktiviert (Nachrichtenlänge: %d Zeichen)", len(req.Message))
 
 		// Query optimieren (konversationelle Frage -> Suchbegriff)
@@ -2003,7 +2230,21 @@ func (app *App) handleChatSendStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// User-Nachricht speichern (mit fixem Experten und Modus)
-	_, err := app.chatStore.AddMessage(chatID, "USER", req.Message, "", 0, req.ExpertID, req.ModeID)
+	// Attachments aus Bildern erstellen
+	var attachmentsJSON string
+	if len(req.Images) > 0 {
+		attachments := make([]map[string]string, len(req.Images))
+		for i, imgBase64 := range req.Images {
+			attachments[i] = map[string]string{
+				"type":    "image",
+				"content": imgBase64,
+				"name":    fmt.Sprintf("image_%d.png", i+1),
+			}
+		}
+		attachmentsBytes, _ := json.Marshal(attachments)
+		attachmentsJSON = string(attachmentsBytes)
+	}
+	_, err := app.chatStore.AddMessageWithAttachments(chatID, "USER", req.Message, "", 0, req.ExpertID, req.ModeID, attachmentsJSON)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -2121,6 +2362,245 @@ Du bist eine KI und kein Mensch - sei ehrlich darüber wenn gefragt.`, currentMo
 		jsonData, _ := json.Marshal(switchData)
 		fmt.Fprintf(w, "data: %s\n\n", jsonData)
 		flusher.Flush()
+	}
+
+	// =============================================================================
+	// VISION CHAINING - Automatische Bildanalyse mit separatem Vision-Server
+	// Der Vision-Server läuft auf Port 2024 parallel zum Chat-Server (Port 2026)
+	// =============================================================================
+	var visionContext string
+	if len(req.Images) > 0 {
+		log.Printf("🖼️ Vision Chaining: %d Bild(er) erkannt", len(req.Images))
+
+		// SSE Event: Vision-Analyse startet
+		visionStartData := map[string]interface{}{
+			"type":    "vision_chain",
+			"status":  "starting",
+			"message": "🖼️ Starte Vision-Server...",
+			"images":  len(req.Images),
+		}
+		visionStartJSON, _ := json.Marshal(visionStartData)
+		fmt.Fprintf(w, "data: %s\n\n", visionStartJSON)
+		flusher.Flush()
+
+		// Prüfen ob VisionServer konfiguriert ist (Model Path im VisionServer selbst prüfen)
+		visionServerConfig := app.visionServer.GetConfig()
+		if app.visionServer != nil && visionServerConfig.ModelPath != "" {
+			// SSE Event: Vision-Server startet (falls nicht bereits läuft)
+			if !app.visionServer.IsReady() {
+				serverStartData := map[string]interface{}{
+					"type":    "vision_chain",
+					"status":  "server_starting",
+					"message": "🖼️ Starte Vision-Server (Port 2024)...",
+				}
+				serverStartJSON, _ := json.Marshal(serverStartData)
+				fmt.Fprintf(w, "data: %s\n\n", serverStartJSON)
+				flusher.Flush()
+			}
+
+			// Bild(er) analysieren - mit intelligenter Klassifizierung
+			for i, imageBase64 := range req.Images {
+				log.Printf("🖼️ Analysiere Bild %d/%d...", i+1, len(req.Images))
+
+				// SSE Event: Klassifizierung startet
+				classifyData := map[string]interface{}{
+					"type":    "vision_chain",
+					"status":  "classifying",
+					"message": fmt.Sprintf("🔍 Klassifiziere Bild %d/%d...", i+1, len(req.Images)),
+					"current": i + 1,
+					"total":   len(req.Images),
+				}
+				classifyJSON, _ := json.Marshal(classifyData)
+				fmt.Fprintf(w, "data: %s\n\n", classifyJSON)
+				flusher.Flush()
+
+				// === SCHRITT 1: Schnelle Klassifizierung via Tesseract ===
+				classification, classErr := vision.ClassifyImage(imageBase64, app.config.DataDir)
+				if classErr != nil {
+					log.Printf("⚠️ Klassifizierung fehlgeschlagen: %v - verwende Vision-Analyse", classErr)
+					classification = nil
+				}
+
+				// === SCHRITT 2: Pipeline basierend auf Klassifizierung wählen ===
+				if classification != nil && classification.IsDocument && classification.Confidence >= 0.7 {
+					// === DOKUMENT ERKANNT → OCR-Text priorisieren ===
+					log.Printf("📄 Dokument erkannt: %s (Konfidenz: %.0f%%, Rechtlich: %v)",
+						classification.DocumentType, classification.Confidence*100, classification.LegalRelevance)
+
+					// SSE Event: Dokument erkannt
+					docData := map[string]interface{}{
+						"type":           "vision_chain",
+						"status":         "document_detected",
+						"documentType":   classification.DocumentType,
+						"legalRelevance": classification.LegalRelevance,
+						"message":        fmt.Sprintf("📄 Dokument erkannt: %s", classification.DocumentType),
+					}
+					docJSON, _ := json.Marshal(docData)
+					fmt.Fprintf(w, "data: %s\n\n", docJSON)
+					flusher.Flush()
+
+					// OCR-Text als primärer Kontext (exakter Text!)
+					if classification.OCRText != "" {
+						visionContext += fmt.Sprintf("\n\n=== DOKUMENT %d (%s) ===\n", i+1, classification.DocumentType)
+						visionContext += fmt.Sprintf("Dokumenttyp: %s\n", classification.DocumentType)
+						if classification.LegalRelevance {
+							visionContext += "⚠️ RECHTLICH RELEVANT - Text wörtlich verwenden!\n"
+						}
+						visionContext += fmt.Sprintf("Gefundene Indikatoren: %s\n", strings.Join(classification.Indicators, ", "))
+						visionContext += fmt.Sprintf("\n--- VOLLSTÄNDIGER TEXT (OCR) ---\n%s\n--- ENDE TEXT ---", classification.OCRText)
+						log.Printf("✅ OCR-Text für Dokument %d: %d Zeichen", i+1, len(classification.OCRText))
+					}
+
+					// Optionale kurze Vision-Analyse für Stempel, Unterschriften, Logos
+					if classification.LegalRelevance && app.visionServer != nil && app.visionServer.GetConfig().ModelPath != "" {
+						// SSE Event: Vision für visuelle Elemente
+						visualData := map[string]interface{}{
+							"type":    "vision_chain",
+							"status":  "analyzing_visual",
+							"message": "🔍 Prüfe Stempel, Unterschriften, Logos...",
+						}
+						visualJSON, _ := json.Marshal(visualData)
+						fmt.Fprintf(w, "data: %s\n\n", visualJSON)
+						flusher.Flush()
+
+						// Kurze Vision-Analyse nur für visuelle Elemente
+						visualPrompt := "Beschreibe NUR die visuellen Elemente in diesem Dokument: Stempel, Unterschriften, Logos, Briefkopf. Ignoriere den Text - konzentriere dich nur auf visuelle Elemente. Antworte kurz und präzise auf Deutsch."
+						ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
+						visualAnalysis, visualErr := app.visionServer.AnalyzeImage(ctx, imageBase64, visualPrompt)
+						cancel()
+						if visualErr == nil && visualAnalysis != nil && len(visualAnalysis.Description) > 20 {
+							visionContext += fmt.Sprintf("\n\nVisuelle Elemente: %s", visualAnalysis.Description)
+							log.Printf("✅ Vision-Elemente für Dokument %d: %d Zeichen", i+1, len(visualAnalysis.Description))
+						}
+					}
+				} else {
+					// === FOTO/BILD → Volle Vision-Analyse ===
+					log.Printf("🖼️ Foto/Bild erkannt - verwende Vision-Analyse")
+
+					// SSE Event: Bild wird analysiert
+					analyzeData := map[string]interface{}{
+						"type":    "vision_chain",
+						"status":  "analyzing",
+						"message": fmt.Sprintf("🔍 Analysiere Bild %d/%d...", i+1, len(req.Images)),
+						"current": i + 1,
+						"total":   len(req.Images),
+					}
+					analyzeJSON, _ := json.Marshal(analyzeData)
+					fmt.Fprintf(w, "data: %s\n\n", analyzeJSON)
+					flusher.Flush()
+
+					// Vision-Analyse über separaten Server durchführen
+					ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
+					analysis, err := app.visionServer.AnalyzeImage(ctx, imageBase64, "")
+					cancel()
+
+					if err != nil {
+						log.Printf("⚠️ Vision-Server Analyse fehlgeschlagen für Bild %d: %v", i+1, err)
+						// Fallback 1: Versuche alten visionService (Ollama)
+						if app.visionService != nil {
+							ctx2, cancel2 := context.WithTimeout(r.Context(), 5*time.Minute)
+							ollamaAnalysis, ollamaErr := app.visionService.AnalyzeDocument(ctx2, imageBase64)
+							cancel2()
+							if ollamaErr == nil && ollamaAnalysis != nil {
+								visionContext += fmt.Sprintf("\n\n=== BILD %d ===\n%s", i+1, ollamaAnalysis.Description)
+								log.Printf("✅ Ollama-Fallback für Bild %d: %d Zeichen", i+1, len(ollamaAnalysis.Description))
+								continue
+							}
+						}
+						// Fallback 2: Tesseract OCR (falls doch Text vorhanden)
+						if classification != nil && classification.OCRText != "" {
+							visionContext += fmt.Sprintf("\n\n=== BILD %d (OCR) ===\n%s", i+1, classification.OCRText)
+							log.Printf("✅ OCR-Fallback für Bild %d: %d Zeichen", i+1, len(classification.OCRText))
+						}
+					} else if analysis != nil {
+						visionContext += fmt.Sprintf("\n\n=== BILD %d ===\n%s", i+1, analysis.Description)
+						if analysis.Text != "" {
+							visionContext += fmt.Sprintf("\nText im Bild: %s", analysis.Text)
+						}
+						if analysis.DocumentType != "" {
+							visionContext += fmt.Sprintf("\nDokumenttyp: %s", analysis.DocumentType)
+						}
+						log.Printf("✅ Vision-Server Bild %d: %d Zeichen", i+1, len(analysis.Description))
+
+						// Bei showIntermediateOutput: Vision-Ergebnis als Content senden
+						if req.ShowIntermediateOutput {
+							intermediateData := map[string]interface{}{
+								"type":    "vision_chain",
+								"status":  "intermediate",
+								"content": fmt.Sprintf("**🖼️ Bildanalyse:**\n%s", analysis.Description),
+							}
+							intermediateJSON, _ := json.Marshal(intermediateData)
+							fmt.Fprintf(w, "data: %s\n\n", intermediateJSON)
+							flusher.Flush()
+						}
+					}
+				}
+			}
+
+			// SSE Event: Vision-Analyse abgeschlossen
+			visionDoneData := map[string]interface{}{
+				"type":    "vision_chain",
+				"status":  "complete",
+				"message": fmt.Sprintf("✅ %d Bild(er) analysiert", len(req.Images)),
+			}
+			visionDoneJSON, _ := json.Marshal(visionDoneData)
+			fmt.Fprintf(w, "data: %s\n\n", visionDoneJSON)
+			flusher.Flush()
+
+			// KEIN Model-Restore nötig - Vision-Server läuft parallel!
+			log.Printf("✅ Vision Chaining abgeschlossen (Vision-Server bleibt aktiv für %v)", visionServerConfig.IdleTimeout)
+		} else {
+			log.Printf("⚠️ Vision Chaining: Kein Vision-Modell konfiguriert")
+			// SSE Event: Vision nicht verfügbar
+			noVisionData := map[string]interface{}{
+				"type":    "vision_chain",
+				"status":  "unavailable",
+				"message": "⚠️ Vision-Modell nicht konfiguriert. Bild wird als Anhang behandelt.",
+			}
+			noVisionJSON, _ := json.Marshal(noVisionData)
+			fmt.Fprintf(w, "data: %s\n\n", noVisionJSON)
+			flusher.Flush()
+		}
+	}
+
+	// Vision-Kontext zum System-Prompt hinzufügen
+	if visionContext != "" {
+		finalSystemPrompt = finalSystemPrompt + `
+
+=== BILDANALYSE (bereits durchgeführt) ===
+Die folgenden Bilder wurden vom Benutzer hochgeladen und von einem Vision-Modell analysiert:
+` + visionContext + `
+
+KRITISCHE ANWEISUNG FÜR BILDANFRAGEN:
+- Die Bildanalyse oben wurde BEREITS von einem Vision-Modell durchgeführt.
+- Du MUSST diese Analyse verwenden, um die Frage des Benutzers zu beantworten.
+- Beantworte die Frage des Benutzers basierend auf der Bildanalyse.`
+		log.Printf("Vision-Kontext hinzugefügt: %d Zeichen", len(visionContext))
+
+		// WICHTIG: Vision-Kontext DIREKT in die User-Nachricht einbauen (nicht nur System-Prompt)
+		// Das LLM versteht es besser, wenn die Bildanalyse Teil der Konversation ist
+		if len(conversationMessages) > 0 {
+			// System-Prompt aktualisieren
+			if conversationMessages[0].Role == "system" {
+				conversationMessages[0].Content = finalSystemPrompt
+			}
+
+			// Letzte User-Nachricht finden und mit Vision-Kontext anreichern
+			for i := len(conversationMessages) - 1; i >= 0; i-- {
+				if conversationMessages[i].Role == "user" {
+					originalQuestion := conversationMessages[i].Content
+					enrichedMessage := fmt.Sprintf(`[BILDANALYSE - Ein Vision-Modell hat das hochgeladene Bild analysiert:]
+%s
+
+[DEINE AUFGABE]
+Beantworte folgende Frage basierend auf der obigen Bildanalyse:
+%s`, visionContext, originalQuestion)
+					conversationMessages[i].Content = enrichedMessage
+					log.Printf("User-Nachricht mit Vision-Kontext angereichert")
+					break
+				}
+			}
+		}
 	}
 
 	// Prüfen ob Model-Switch für llama-server nötig ist
@@ -3285,6 +3765,55 @@ func (app *App) handleModelStoreFeatured(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+// determineFileType bestimmt den Dateityp basierend auf Dateiendung und Content-Type
+// Exported für Unit-Tests
+func DetermineFileType(filename, contentType string) string {
+	ext := strings.ToLower(filepath.Ext(filename))
+
+	switch ext {
+	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff", ".tif":
+		return "image"
+	case ".pdf":
+		return "pdf"
+	case ".txt", ".md", ".markdown":
+		return "text"
+	case ".docx":
+		return "docx"
+	case ".odt":
+		return "odt"
+	case ".xlsx":
+		return "xlsx"
+	case ".xls":
+		return "xls"
+	case ".csv":
+		return "csv"
+	case ".eml":
+		return "eml"
+	case ".html", ".htm":
+		return "html"
+	case ".json":
+		return "json"
+	case ".xml":
+		return "xml"
+	default:
+		// Check content type as fallback
+		if strings.HasPrefix(contentType, "image/") {
+			return "image"
+		} else if contentType == "application/pdf" {
+			return "pdf"
+		} else if strings.HasPrefix(contentType, "text/") {
+			return "text"
+		} else if contentType == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" {
+			return "docx"
+		} else if contentType == "application/vnd.oasis.opendocument.text" {
+			return "odt"
+		} else if contentType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" {
+			return "xlsx"
+		}
+	}
+	return "unknown"
+}
+
 // handleFileUpload - POST /api/files/upload
 // Handles file uploads for chat attachments (images, text, PDF)
 func (app *App) handleFileUpload(w http.ResponseWriter, r *http.Request) {
@@ -3310,51 +3839,8 @@ func (app *App) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 	size := header.Size
 	contentType := header.Header.Get("Content-Type")
 
-	// Determine file type
-	fileType := "unknown"
-	ext := strings.ToLower(filepath.Ext(filename))
-
-	switch ext {
-	case ".png", ".jpg", ".jpeg", ".gif", ".webp":
-		fileType = "image"
-	case ".pdf":
-		fileType = "pdf"
-	case ".txt", ".md", ".markdown":
-		fileType = "text"
-	case ".docx":
-		fileType = "docx"
-	case ".odt":
-		fileType = "odt"
-	case ".xlsx":
-		fileType = "xlsx"
-	case ".xls":
-		fileType = "xls"
-	case ".csv":
-		fileType = "csv"
-	case ".eml":
-		fileType = "eml"
-	case ".html", ".htm":
-		fileType = "html"
-	case ".json":
-		fileType = "json"
-	case ".xml":
-		fileType = "xml"
-	default:
-		// Check content type as fallback
-		if strings.HasPrefix(contentType, "image/") {
-			fileType = "image"
-		} else if contentType == "application/pdf" {
-			fileType = "pdf"
-		} else if strings.HasPrefix(contentType, "text/") {
-			fileType = "text"
-		} else if contentType == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" {
-			fileType = "docx"
-		} else if contentType == "application/vnd.oasis.opendocument.text" {
-			fileType = "odt"
-		} else if contentType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" {
-			fileType = "xlsx"
-		}
-	}
+	// Determine file type using extracted function
+	fileType := DetermineFileType(filename, contentType)
 
 	// Read file content
 	content, err := io.ReadAll(file)
@@ -6219,6 +6705,188 @@ func (app *App) handleLlamaServerVRAMClear(w http.ResponseWriter, r *http.Reques
 }
 
 // ============================================================================
+// Vision-Server API Handler (separater llama-server für On-Demand Bildanalyse)
+// ============================================================================
+
+// handleVisionServerStatus gibt den Status des Vision-Servers zurück
+// GET /api/visionserver/status
+func (app *App) handleVisionServerStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if app.visionServer == nil {
+		writeJSON(w, map[string]interface{}{
+			"available": false,
+			"error":     "Vision-Server nicht initialisiert",
+		})
+		return
+	}
+
+	status := app.visionServer.GetStatus()
+	writeJSON(w, map[string]interface{}{
+		"available":     true,
+		"running":       status.Running,
+		"ready":         status.Ready,
+		"modelName":     status.ModelName,
+		"port":          status.Port,
+		"lastUsed":      status.LastUsed,
+		"idleTimeout":   status.IdleTimeout,
+		"timeUntilStop": status.TimeUntilStop,
+	})
+}
+
+// handleVisionServerStart startet den Vision-Server manuell
+// POST /api/visionserver/start
+func (app *App) handleVisionServerStart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if app.visionServer == nil {
+		http.Error(w, "Vision-Server nicht initialisiert", http.StatusInternalServerError)
+		return
+	}
+
+	if err := app.visionServer.EnsureRunning(); err != nil {
+		writeJSON(w, map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	status := app.visionServer.GetStatus()
+	writeJSON(w, map[string]interface{}{
+		"success":   true,
+		"running":   status.Running,
+		"ready":     status.Ready,
+		"modelName": status.ModelName,
+		"port":      status.Port,
+	})
+}
+
+// handleVisionServerStop stoppt den Vision-Server manuell
+// POST /api/visionserver/stop
+func (app *App) handleVisionServerStop(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if app.visionServer == nil {
+		http.Error(w, "Vision-Server nicht initialisiert", http.StatusInternalServerError)
+		return
+	}
+
+	if err := app.visionServer.Stop(); err != nil {
+		writeJSON(w, map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	writeJSON(w, map[string]interface{}{
+		"success": true,
+		"message": "Vision-Server gestoppt",
+	})
+}
+
+// handleVisionServerConfig verwaltet die Vision-Server Konfiguration
+// GET: Aktuelle Konfiguration abrufen
+// POST: Konfiguration aktualisieren (modelPath, mmprojPath, idleTimeout)
+func (app *App) handleVisionServerConfig(w http.ResponseWriter, r *http.Request) {
+	if app.visionServer == nil {
+		http.Error(w, "Vision-Server nicht initialisiert", http.StatusInternalServerError)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		config := app.visionServer.GetConfig()
+		visionSettings := app.settingsService.GetVisionSettings()
+		writeJSON(w, map[string]interface{}{
+			"port":        config.Port,
+			"host":        config.Host,
+			"modelPath":   config.ModelPath,
+			"mmprojPath":  config.MmprojPath,
+			"gpuLayers":   config.GPULayers,
+			"contextSize": config.ContextSize,
+			"idleTimeout": int(config.IdleTimeout.Seconds()),
+			"enabled":     config.Enabled,
+			"modelName":   visionSettings.Model,
+		})
+
+	case http.MethodPost:
+		var req struct {
+			ModelPath   string `json:"modelPath"`
+			MmprojPath  string `json:"mmprojPath"`
+			IdleTimeout int    `json:"idleTimeout"` // in Sekunden
+			GPULayers   *int   `json:"gpuLayers"`   // 0 = CPU only (RAM), 99 = alle auf GPU
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Ungültiges JSON", http.StatusBadRequest)
+			return
+		}
+
+		// Modellpfade aktualisieren
+		if req.ModelPath != "" {
+			app.visionServer.SetModelPath(req.ModelPath, req.MmprojPath)
+			// In Settings speichern
+			if err := app.settingsService.SetVisionModelPath(req.ModelPath); err != nil {
+				log.Printf("Fehler beim Speichern des Vision-Modellpfads: %v", err)
+			}
+			if req.MmprojPath != "" {
+				if err := app.settingsService.SetVisionMmprojPath(req.MmprojPath); err != nil {
+					log.Printf("Fehler beim Speichern des mmproj-Pfads: %v", err)
+				}
+			}
+		}
+
+		// Idle-Timeout aktualisieren
+		if req.IdleTimeout > 0 {
+			app.visionServer.SetIdleTimeout(time.Duration(req.IdleTimeout) * time.Second)
+			// In Settings speichern
+			visionSettings := app.settingsService.GetVisionSettings()
+			visionSettings.IdleTimeout = req.IdleTimeout
+			if err := app.settingsService.SaveVisionSettings(visionSettings); err != nil {
+				log.Printf("Fehler beim Speichern des Idle-Timeouts: %v", err)
+			}
+		}
+
+		// GPU-Layers aktualisieren (0 = CPU/RAM, 99 = alles auf GPU)
+		if req.GPULayers != nil {
+			app.visionServer.SetGPULayers(*req.GPULayers)
+			// In Settings speichern
+			visionSettings := app.settingsService.GetVisionSettings()
+			visionSettings.GPULayers = *req.GPULayers
+			if err := app.settingsService.SaveVisionSettings(visionSettings); err != nil {
+				log.Printf("Fehler beim Speichern der GPU-Layers: %v", err)
+			}
+			// Wenn Server läuft, muss er neu gestartet werden
+			if app.visionServer.IsRunning() {
+				log.Printf("[Vision] GPU-Layers geändert auf %d, Neustart erforderlich", *req.GPULayers)
+			}
+		}
+
+		config := app.visionServer.GetConfig()
+		writeJSON(w, map[string]interface{}{
+			"success":     true,
+			"modelPath":   config.ModelPath,
+			"mmprojPath":  config.MmprojPath,
+			"idleTimeout": int(config.IdleTimeout.Seconds()),
+			"gpuLayers":   config.GPULayers,
+		})
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// ============================================================================
 // Hardware Monitoring API Handler
 // ============================================================================
 
@@ -8135,13 +8803,49 @@ func (app *App) handleHuggingFaceDetails(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// GGUF-Dateien finden
+	// Echte Dateigrößen von der Tree-API holen
+	fileSizes := make(map[string]int64)
+	treeURL := fmt.Sprintf("https://huggingface.co/api/models/%s/tree/main", modelId)
+	log.Printf("Fetching file sizes from: %s", treeURL)
+	treeResp, treeErr := client.Get(treeURL)
+	if treeErr != nil {
+		log.Printf("Tree API error: %v", treeErr)
+	} else if treeResp.StatusCode != http.StatusOK {
+		log.Printf("Tree API returned status: %d", treeResp.StatusCode)
+		treeResp.Body.Close()
+	} else {
+		var treeFiles []struct {
+			Path string `json:"path"`
+			Size int64  `json:"size"`
+			Type string `json:"type"`
+		}
+		if decodeErr := json.NewDecoder(treeResp.Body).Decode(&treeFiles); decodeErr != nil {
+			log.Printf("Tree API decode error: %v", decodeErr)
+		} else {
+			for _, f := range treeFiles {
+				if f.Type == "file" {
+					fileSizes[f.Path] = f.Size
+				}
+			}
+			log.Printf("Loaded %d file sizes from tree API", len(fileSizes))
+		}
+		treeResp.Body.Close()
+	}
+
+	// GGUF-Dateien finden mit echten Größen
 	var ggufFiles []map[string]interface{}
 	var siblings []string // Für Frontend-Kompatibilität (erwartet Array von Dateinamen)
 	for _, sibling := range hfModel.Siblings {
 		if strings.HasSuffix(strings.ToLower(sibling.RFilename), ".gguf") {
-			// Größe und Quantisierung aus Dateiname ableiten
-			sizeBytes, sizeHuman := estimateGGUFSize(sibling.RFilename)
+			// Echte Größe aus Tree-API oder Schätzung
+			var sizeBytes int64
+			var sizeHuman string
+			if realSize, ok := fileSizes[sibling.RFilename]; ok {
+				sizeBytes = realSize
+				sizeHuman = formatFileSize(realSize)
+			} else {
+				sizeBytes, sizeHuman = estimateGGUFSize(sibling.RFilename)
+			}
 			quant := extractQuantization(sibling.RFilename)
 
 			ggufFiles = append(ggufFiles, map[string]interface{}{
@@ -8204,6 +8908,26 @@ func (app *App) handleHuggingFaceDetails(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+// formatFileSize formatiert Bytes in menschenlesbare Größe (KB, MB, GB)
+func formatFileSize(bytes int64) string {
+	const (
+		KB = 1024
+		MB = KB * 1024
+		GB = MB * 1024
+	)
+
+	switch {
+	case bytes >= GB:
+		return fmt.Sprintf("%.1f GB", float64(bytes)/float64(GB))
+	case bytes >= MB:
+		return fmt.Sprintf("%.1f MB", float64(bytes)/float64(MB))
+	case bytes >= KB:
+		return fmt.Sprintf("%.1f KB", float64(bytes)/float64(KB))
+	default:
+		return fmt.Sprintf("%d B", bytes)
+	}
+}
+
 // estimateGGUFSize schätzt die Größe einer GGUF-Datei basierend auf dem Dateinamen
 func estimateGGUFSize(filename string) (int64, string) {
 	nameLower := strings.ToLower(filename)
@@ -8261,12 +8985,22 @@ func estimateGGUFSize(filename string) (int64, string) {
 // extractQuantization extrahiert die Quantisierung aus dem Dateinamen
 func extractQuantization(filename string) string {
 	nameLower := strings.ToLower(filename)
+	// Sortiert nach Spezifität (längere Patterns zuerst)
 	patterns := []string{
-		"Q8_0", "Q6_K_L", "Q6_K",
+		// IQ Quantisierungen (neuere Formate)
+		"IQ4_NL", "IQ4_XS",
+		"IQ3_XXS", "IQ3_XS", "IQ3_M", "IQ3_S",
+		"IQ2_XXS", "IQ2_XS", "IQ2_M", "IQ2_S",
+		"IQ1_M", "IQ1_S",
+		// Standard Quantisierungen
+		"Q8_0",
+		"Q6_K_L", "Q6_K",
 		"Q5_K_M", "Q5_K_S", "Q5_K_L", "Q5_0",
-		"Q4_K_M", "Q4_K_S", "Q4_K_L", "Q4_0", "IQ4_XS", "IQ4_NL",
-		"Q3_K_M", "Q3_K_S", "Q3_K_L", "Q2_K",
-		"F16", "F32",
+		"Q4_K_M", "Q4_K_S", "Q4_K_L", "Q4_0",
+		"Q3_K_M", "Q3_K_S", "Q3_K_L",
+		"Q2_K", "Q2_K_S",
+		// Full Precision
+		"F32", "F16", "BF16",
 	}
 
 	for _, p := range patterns {
@@ -10964,6 +11698,123 @@ func (app *App) handleVoiceAssistantSettings(w http.ResponseWriter, r *http.Requ
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+// handleVoiceAssistantStatus - GET /api/voice-assistant/status
+// Gibt den Status des Wake Word Listeners zurück
+func (app *App) handleVoiceAssistantStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	status := app.voiceService.GetWakeWordStatus()
+
+	// Ergänze mit Settings
+	settings := app.settingsService.GetVoiceAssistantSettings()
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"running":          status.Running,
+		"available":        status.Available,
+		"audioCaptureTool": status.AudioCaptureTool,
+		"whisperReady":     status.WhisperReady,
+		"error":            status.Error,
+		"wakeWordEnabled":  settings.Enabled,
+		"wakeWord":         settings.WakeWord,
+	})
+}
+
+// handleVoiceAssistantStart - POST /api/voice-assistant/start
+// Startet den Wake Word Listener
+func (app *App) handleVoiceAssistantStart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	// Settings laden für Wake Words
+	settings := app.settingsService.GetVoiceAssistantSettings()
+	wakeWords := voice.WakeWordFromSettingsKey(settings.WakeWord, settings.CustomWakeWord)
+
+	// Wake Word Callback setzen - sendet Event an alle WebSocket-Clients
+	app.voiceService.OnWakeWordDetected = func(word string, confidence float64) {
+		// Broadcast an alle Clients via WebSocket
+		if app.wsServer != nil {
+			app.wsServer.BroadcastJSON(map[string]interface{}{
+				"type": "wake_word_detected",
+				"payload": map[string]interface{}{
+					"word":       word,
+					"confidence": confidence,
+				},
+			})
+		}
+	}
+
+	// Listener starten
+	if err := app.voiceService.StartWakeWordListener(wakeWords); err != nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":   true,
+		"message":   "Wake Word Listener gestartet",
+		"wakeWords": wakeWords,
+	})
+}
+
+// handleVoiceAssistantStop - POST /api/voice-assistant/stop
+// Stoppt den Wake Word Listener
+func (app *App) handleVoiceAssistantStop(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := app.voiceService.StopWakeWordListener(); err != nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Wake Word Listener gestoppt",
+	})
+}
+
+// handleVoiceAssistantDevices - GET /api/voice-assistant/devices
+// Gibt verfügbare Audio-Eingabegeräte zurück
+func (app *App) handleVoiceAssistantDevices(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	devices, err := app.voiceService.GetAudioDevices()
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+			"devices": []interface{}{},
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(devices)
 }
 
 // voiceStoreCache speichert die Piper Voices von HuggingFace

@@ -838,10 +838,11 @@ myService := mymodule.NewService()
 | 2025-12-25 | [CHANGELOG_2025-12-25.md](docs/CHANGELOG_2025-12-25.md) | **Anti-Halluzination konfigurierbar, DELEGATE-Tag für Experten-Umschaltung, Unit-Tests** |
 | 2025-12-26 | [CHANGELOG_2025-12-26.md](docs/CHANGELOG_2025-12-26.md) | **SettingsModal.vue Refactoring Phase 2**: 3 weitere Tab-Komponenten integriert, -819 Zeilen (-22%), 9/11 Tabs fertig |
 | 2025-12-27 | [CHANGELOG_2025-12-27.md](docs/CHANGELOG_2025-12-27.md) | **Model-Swap Fix, GitHub Actions repariert, SettingsModal Phase 3 fertig**: Race-Condition behoben, Workflow-Permissions, alle 11 Tabs modularisiert |
+| 2026-01-01 | [CHANGELOG_2026-01-01.md](docs/CHANGELOG_2026-01-01.md) | **Wake Word Feature**: Native Audio-Capture (parecord/arecord/sox), Voice Assistant API, Issue #18 gelöst, Unit-Tests für File-Upload |
 
 ---
 
-## Migration Status (Stand: 2025-12-27)
+## Migration Status (Stand: 2026-01-01)
 
 ### Übersicht nach Modulen
 
@@ -966,16 +967,17 @@ window.processSelectedFolders = processSelectedFolders;
 - SSE "delegation" Event ans Frontend mit expertId, expertName, expertAvatar
 - Frontend-Handler in `chatStore.js` wechselt automatisch zum Experten
 
-#### 18. Wake Word Audio funktioniert nicht (OFFEN)
-**Problem:** Wake Word Detection mit "Ewa" / "Hey Ewa" funktioniert nicht.
-**Status:** Audio-Capture im Browser nicht vollständig implementiert.
-**Betroffene Dateien:**
-- `internal/voice/service.go`
-- `web/src/composables/useVoice.js`
-**TODO:**
-- [ ] Browser Audio-Capture testen (MediaRecorder API)
-- [ ] Whisper STT Integration prüfen
-- [ ] Wake Word Pattern Matching debuggen
+#### 18. Wake Word Audio funktioniert nicht (GELÖST - 2026-01-01)
+**Problem:** Wake Word Detection mit "Ewa" / "Hey Ewa" funktionierte nicht.
+**Ursache:** Browser-basiertes Audio-Capture war unzuverlässig und hatte Plattformprobleme.
+**Lösung:** Native Audio-Capture auf OS-Ebene implementiert:
+- Neues Modul `internal/voice/native_capture.go` mit plattformspezifischer Audio-Capture
+- Linux: `parecord` (PulseAudio) oder `arecord` (ALSA)
+- macOS: `sox` mit coreaudio
+- Windows: `sox` mit DirectSound
+- Wake Word Listener mit kontinuierlicher Whisper-Transkription
+- API-Endpoints: `/api/voice-assistant/status`, `/start`, `/stop`, `/devices`
+- WebSocket-Broadcast bei Wake Word Detection (`wake_word_detected` Event)
 
 #### 19. Tesseract OCR Download-API fehlte (GELÖST - 2025-12-26)
 **Problem:** API-Endpoint `/api/setup/tesseract/download` existierte nicht, daher konnte Tesseract nicht installiert werden.
@@ -1008,14 +1010,15 @@ BaseModel  string `json:"model"`
 - [ ] FR-Übersetzung vervollständigen (~900 fehlende Keys)
 - [ ] ES-Übersetzung vervollständigen (~1150 fehlende Keys)
 - [x] TTS-Stimmen Download-Dialog bei Sprachwechsel
-- [ ] ~~Wake Words: "Ewa" funktioniert sprachübergreifend~~ → Siehe Issue #18
+- [x] Wake Words: "Ewa" / "Hey Ewa" / "Hallo Ewa" funktioniert → Issue #18 gelöst
 
-**Voice-System (⚠️ FUNKTIONIERT NICHT - Issue #18):**
-- [ ] **Wake Word Detection funktioniert nicht** - Audio-Capture im Browser nicht vollständig
-- [ ] Browser MediaRecorder API Integration
-- [ ] Whisper STT Backend-Anbindung
+**Voice-System (✅ Wake Word funktioniert - Issue #18 gelöst):**
+- [x] **Wake Word Detection** - Native Audio-Capture auf OS-Ebene
+- [x] Whisper STT Backend-Anbindung (kontinuierliche Transkription)
+- [x] API-Endpoints für Voice Assistant
 - [ ] TTS-Integration (Piper) vervollständigen
 - [ ] Sound-Dateien für Feedback einbetten
+- [ ] Frontend-UI für Voice Assistant
 
 **Tesseract OCR (✅ GELÖST - Issue #19):**
 - [x] Download-Funktion vom Mirror (alle OS)

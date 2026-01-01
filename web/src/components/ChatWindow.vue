@@ -111,6 +111,54 @@
       </div>
     </Transition>
 
+    <!-- Vision Chaining Overlay - Shows when analyzing images -->
+    <Transition
+      enter-active-class="transition-all duration-300 ease-out"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition-all duration-200 ease-in"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <div
+        v-if="chatStore.isAnalyzingVision"
+        class="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      >
+        <div class="bg-gray-800/95 border border-cyan-700/50 rounded-2xl p-8 shadow-2xl text-center max-w-sm">
+          <!-- Animated Vision spinner with photo icon -->
+          <div class="mb-4 flex justify-center">
+            <div class="relative w-20 h-20">
+              <!-- Outer ring -->
+              <div class="absolute inset-0 rounded-full border-4 border-gray-600"></div>
+              <!-- Spinning cyan ring -->
+              <div class="absolute inset-0 rounded-full border-4 border-t-cyan-500 border-r-cyan-500/50 animate-spin"></div>
+              <!-- Inner spinning ring -->
+              <div class="absolute inset-2 rounded-full border-2 border-t-teal-400 animate-spin" style="animation-direction: reverse; animation-duration: 1.5s;"></div>
+              <!-- Center photo icon -->
+              <div class="absolute inset-0 flex items-center justify-center">
+                <PhotoIcon class="w-8 h-8 text-cyan-400" />
+              </div>
+            </div>
+          </div>
+          <!-- Message -->
+          <h3 class="text-lg font-semibold text-white mb-2">🖼️ Bildanalyse</h3>
+          <p class="text-cyan-300 text-sm">{{ chatStore.visionChainMessage || 'Analysiere Bild...' }}</p>
+          <!-- Progress info -->
+          <div v-if="chatStore.visionChainProgress?.total > 1" class="mt-2 text-gray-400 text-xs">
+            Bild {{ chatStore.visionChainProgress?.current || 0 }} von {{ chatStore.visionChainProgress?.total || 1 }}
+          </div>
+          <!-- Progress bar -->
+          <div class="mt-4 w-full bg-gray-700 rounded-full h-2">
+            <div
+              class="bg-gradient-to-r from-cyan-500 to-teal-500 h-2 rounded-full transition-all duration-300"
+              :style="{ width: visionProgressPercent + '%' }"
+            ></div>
+          </div>
+          <p class="text-gray-500 text-xs mt-3">Vision-KI erkennt Inhalte im Bild</p>
+        </div>
+      </div>
+    </Transition>
+
     <!-- Messages Area with Custom Scrollbar - scrollt bis zum Bildschirmende -->
     <div ref="messagesContainer" class="messages-area overflow-y-auto p-6 pb-32 space-y-4 custom-scrollbar">
       <!-- Welcome Message - Show when NO chat is selected -->
@@ -277,7 +325,8 @@ import {
   GlobeAltIcon,
   DocumentArrowDownIcon,
   ArrowPathIcon,
-  EyeIcon
+  EyeIcon,
+  PhotoIcon
 } from '@heroicons/vue/24/outline'
 import { useChatStore } from '../stores/chatStore'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -487,6 +536,13 @@ const loadingText = computed(() => {
     return t('loading.searchingAndThinking')
   }
   return t('loading.thinking')
+})
+
+// Computed: Vision Progress Percent
+const visionProgressPercent = computed(() => {
+  const progress = chatStore.visionChainProgress
+  if (!progress || !progress.total) return 50 // Default während Analyse
+  return Math.min(100, (progress.current / progress.total) * 100)
 })
 
 // Auto-scroll to bottom when new messages arrive

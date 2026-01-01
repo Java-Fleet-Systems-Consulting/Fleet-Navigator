@@ -370,6 +370,11 @@ export const useChatStore = defineStore('chat', () => {
   const currentRequestId = computed(() => getStreamingStore().currentRequestId)
   const contextUsage = computed(() => getStreamingStore().contextUsage)
 
+  // Vision Chaining State
+  const isAnalyzingVision = computed(() => getStreamingStore().isAnalyzingVision)
+  const visionChainMessage = computed(() => getStreamingStore().visionChainMessage)
+  const visionChainProgress = computed(() => getStreamingStore().visionChainProgress)
+
   // This ensures existing components continue to work without changes
   return {
     // Chat State (this store)
@@ -400,6 +405,11 @@ export const useChatStore = defineStore('chat', () => {
     streamingEnabled,
     currentRequestId,
     contextUsage,
+
+    // Vision Chaining State
+    isAnalyzingVision,
+    visionChainMessage,
+    visionChainProgress,
 
     // Computed
     currentChatTokens,

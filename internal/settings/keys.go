@@ -40,11 +40,13 @@ const (
 
 // --- Vision/Chaining Settings ---
 const (
-	KeyVisionEnabled     = "vision.enabled"      // Vision aktiviert
-	KeyVisionModel       = "vision.model"        // Vision-Modell (LLaVA etc.)
-	KeyVisionModelPath   = "vision.model_path"   // Pfad zum GGUF
-	KeyVisionMmprojPath  = "vision.mmproj_path"  // Pfad zur mmproj-Datei
-	KeyVisionAutoRestore = "vision.auto_restore" // Nach Vision Chat-Modell wiederherstellen
+	KeyVisionEnabled     = "vision.enabled"       // Vision aktiviert
+	KeyVisionModel       = "vision.model"         // Vision-Modell (LLaVA etc.)
+	KeyVisionModelPath   = "vision.model_path"    // Pfad zum GGUF
+	KeyVisionMmprojPath  = "vision.mmproj_path"   // Pfad zur mmproj-Datei
+	KeyVisionAutoRestore = "vision.auto_restore"  // Nach Vision Chat-Modell wiederherstellen
+	KeyVisionIdleTimeout = "vision.idle_timeout"  // Vision-Server Idle-Timeout in Sekunden
+	KeyVisionAutoStart   = "vision.auto_start"    // Vision-Server beim App-Start hochfahren
 
 	KeyChainingEnabled              = "chaining.enabled"                 // Model Chaining aktiviert
 	KeyChainingVisionModel          = "chaining.vision_model"            // Vision-Modell für Chaining
@@ -98,4 +100,17 @@ const (
 const (
 	KeyDisclaimerAccepted   = "setup.disclaimer.accepted"    // Disclaimer akzeptiert
 	KeyDisclaimerAcceptedAt = "setup.disclaimer.accepted_at" // Zeitpunkt der Akzeptanz
+)
+
+// --- GPU Settings (Multi-GPU Support) ---
+const (
+	KeyGPUAutoDetect       = "gpu.auto_detect"        // Automatische GPU-Erkennung
+	KeyGPUChatID           = "gpu.chat.id"            // GPU-Index für Chat (-1 = auto)
+	KeyGPUChatBackend      = "gpu.chat.backend"       // Backend für Chat (cuda, rocm, vulkan, cpu)
+	KeyGPUChatLayers       = "gpu.chat.layers"        // GPU-Layers für Chat (0-99)
+	KeyGPUVisionID         = "gpu.vision.id"          // GPU-Index für Vision (-1 = auto)
+	KeyGPUVisionBackend    = "gpu.vision.backend"     // Backend für Vision
+	KeyGPUVisionLayers     = "gpu.vision.layers"      // GPU-Layers für Vision
+	KeyGPUStrategy         = "gpu.strategy"           // Strategie-Beschreibung
+	KeyGPULastDetect       = "gpu.last_detect"        // Letzte Erkennung (Timestamp)
 )

@@ -762,6 +762,28 @@ func (s *Server) SendToMate(mateID string, msgType MessageType, payload interfac
 	return nil
 }
 
+// BroadcastJSON sendet eine JSON-Nachricht an alle verbundenen Clients
+// Wird für System-Events wie Wake Word Detection verwendet
+func (s *Server) BroadcastJSON(data interface{}) {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		log.Printf("BroadcastJSON: JSON Marshal Fehler: %v", err)
+		return
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for client := range s.clients {
+		select {
+		case client.Send <- jsonData:
+		default:
+			// Client-Buffer voll, überspringen
+			log.Printf("BroadcastJSON: Client-Buffer voll, überspringe")
+		}
+	}
+}
+
 // GetConnectedMates gibt die IDs aller verbundenen Mates zurück
 func (s *Server) GetConnectedMates() []string {
 	s.mu.RLock()

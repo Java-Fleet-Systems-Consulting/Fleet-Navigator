@@ -82,6 +82,11 @@ type StoredMessage struct {
 	// WICHTIG: Diese Zuordnung ist UNVERÄNDERLICH nach Erstellung!
 	ModeID *int64 `json:"modeId,omitempty"`
 
+	// Attachments: JSON-String mit Anhängen (Bilder, Dateien)
+	// Format: [{"name":"screenshot.png","type":"image","base64":"..."},...]
+	// Für User-Nachrichten: Hochgeladene Bilder/Dateien
+	Attachments string `json:"attachments,omitempty"`
+
 	// CreatedAt: Erstellungszeitpunkt der Nachricht
 	CreatedAt time.Time `json:"createdAt"`
 }
@@ -225,6 +230,20 @@ func (s *Store) migrateSchema() {
 		}
 	} else {
 		log.Printf("Migration: mode_id Spalte zu messages hinzugefügt")
+	}
+
+	// -------------------------------------------------------------------------
+	// Migration 3: attachments Spalte (2025-12-31)
+	// Speichert Anhänge (Bilder, Dateien) als JSON mit Base64-Daten
+	// Format: [{"name":"screenshot.png","type":"image","base64":"..."},...]
+	// -------------------------------------------------------------------------
+	_, err = s.db.Exec(`ALTER TABLE messages ADD COLUMN attachments TEXT DEFAULT NULL`)
+	if err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") {
+			log.Printf("Migration attachments fehlgeschlagen: %v", err)
+		}
+	} else {
+		log.Printf("Migration: attachments Spalte zu messages hinzugefügt")
 	}
 }
 
@@ -437,6 +456,55 @@ func (s *Store) AddMessage(chatID int64, role, content, model string, tokens int
 	}, nil
 }
 
+// AddMessageWithAttachments fügt eine Nachricht mit Anhängen hinzu.
+// Anhänge werden als JSON-String gespeichert (inkl. Base64-Bilddaten).
+//
+// Parameter:
+//   - chatID: Der Chat zu dem die Nachricht gehört
+//   - role: "USER" oder "ASSISTANT"
+//   - content: Der Nachrichteninhalt
+//   - model: Das verwendete LLM-Modell
+//   - tokens: Anzahl verbrauchter Tokens
+//   - expertID: Fixe Expert-Zuordnung (nil = kein Experte)
+//   - modeID: Fixe Modus-Zuordnung (nil = Standard-Modus)
+//   - attachments: JSON-String mit Anhängen (leer wenn keine)
+func (s *Store) AddMessageWithAttachments(chatID int64, role, content, model string, tokens int, expertID, modeID *int64, attachments string) (*StoredMessage, error) {
+	now := time.Now()
+
+	// Nachricht in Datenbank einfügen (mit attachments)
+	result, err := s.db.Exec(`
+		INSERT INTO messages (chat_id, role, content, tokens, model, expert_id, mode_id, attachments, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, chatID, role, content, tokens, model, expertID, modeID, attachments, now)
+
+	if err != nil {
+		return nil, fmt.Errorf("Message hinzufügen fehlgeschlagen: %w", err)
+	}
+
+	// Chat-Timestamp aktualisieren
+	if _, err := s.db.Exec(`UPDATE chats SET updated_at = ? WHERE id = ?`, now, chatID); err != nil {
+		log.Printf("WARNUNG: Chat-Timestamp konnte nicht aktualisiert werden: %v", err)
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		return nil, err
+	}
+
+	return &StoredMessage{
+		ID:          id,
+		ChatID:      chatID,
+		Role:        role,
+		Content:     content,
+		Tokens:      tokens,
+		Model:       model,
+		ExpertID:    expertID,
+		ModeID:      modeID,
+		Attachments: attachments,
+		CreatedAt:   now,
+	}, nil
+}
+
 // GetMessages lädt alle Nachrichten eines Chats.
 // Sortiert chronologisch (älteste zuerst).
 //
@@ -448,7 +516,7 @@ func (s *Store) AddMessage(chatID int64, role, content, model string, tokens int
 //   - error: Datenbankfehler
 func (s *Store) GetMessages(chatID int64) ([]StoredMessage, error) {
 	rows, err := s.db.Query(`
-		SELECT id, chat_id, role, content, tokens, model, expert_id, mode_id, created_at
+		SELECT id, chat_id, role, content, tokens, model, expert_id, mode_id, attachments, created_at
 		FROM messages
 		WHERE chat_id = ?
 		ORDER BY created_at ASC
@@ -461,10 +529,14 @@ func (s *Store) GetMessages(chatID int64) ([]StoredMessage, error) {
 	var messages []StoredMessage
 	for rows.Next() {
 		var m StoredMessage
-		// Alle Felder scannen inkl. nullable expert_id und mode_id
-		err := rows.Scan(&m.ID, &m.ChatID, &m.Role, &m.Content, &m.Tokens, &m.Model, &m.ExpertID, &m.ModeID, &m.CreatedAt)
+		var attachments sql.NullString // Nullable Feld
+		// Alle Felder scannen inkl. nullable expert_id, mode_id und attachments
+		err := rows.Scan(&m.ID, &m.ChatID, &m.Role, &m.Content, &m.Tokens, &m.Model, &m.ExpertID, &m.ModeID, &attachments, &m.CreatedAt)
 		if err != nil {
 			return nil, err
+		}
+		if attachments.Valid {
+			m.Attachments = attachments.String
 		}
 		messages = append(messages, m)
 	}

@@ -50,6 +50,9 @@ type Config struct {
 	UseMmap      bool         `json:"useMmap"`      // --mmap: Memory-mapped I/O für schnelleres Laden
 	UseMlock     bool         `json:"useMlock"`     // --mlock: Modell im RAM pinnen (verhindert Swap)
 	VisionEnabled bool        `json:"visionEnabled"` // Vision/Multimodal aktiviert
+	// Multi-GPU Support
+	MainGPU      int          `json:"mainGpu"`      // --main-gpu: GPU-Index für diesen Server (-1 = auto)
+	Backend      string       `json:"backend"`      // cuda, rocm, vulkan, cpu
 }
 
 // DefaultConfig gibt die Standard-Konfiguration zurück
@@ -78,6 +81,8 @@ func DefaultConfig(dataDir string) Config {
 		VRAMReserve:  512,               // 512MB für System reservieren
 		UseMmap:      true,              // Standard: mmap aktiviert (schnelleres Laden)
 		UseMlock:     false,             // Standard: mlock deaktiviert (braucht Berechtigung)
+		MainGPU:      -1,                // -1 = automatische Auswahl
+		Backend:      "auto",            // auto = beste verfügbare (cuda > rocm > vulkan > cpu)
 	}
 }
 
@@ -312,11 +317,21 @@ func (s *Server) Start(modelPath string) error {
 	// Wichtig: Nach Setup-Download könnte eine neuere Binary im dataDir/bin/ liegen
 	if s.config.ModelsDir != "" {
 		dataDir := filepath.Dir(s.config.ModelsDir) // models -> dataDir
-		binPath, libPath, err := GetOrExtractLlamaServer(dataDir)
+
+		// Backend-spezifisches Binary suchen
+		var binPath, libPath string
+		var err error
+		if s.config.Backend != "" && s.config.Backend != "auto" {
+			binPath, libPath, err = GetLlamaServerForBackend(dataDir, s.config.Backend)
+		} else {
+			binPath, libPath, err = GetOrExtractLlamaServer(dataDir)
+		}
+
 		if err == nil {
 			// Nur aktualisieren wenn sich der Pfad geändert hat
 			if binPath != s.config.BinaryPath {
-				log.Printf("llama-server Binary aktualisiert: %s -> %s", s.config.BinaryPath, binPath)
+				log.Printf("llama-server Binary aktualisiert: %s -> %s (Backend: %s)",
+					s.config.BinaryPath, binPath, s.config.Backend)
 				s.config.BinaryPath = binPath
 				s.config.LibraryPath = libPath
 			}
@@ -403,6 +418,12 @@ func (s *Server) Start(modelPath string) error {
 	if s.config.UseMlock {
 		args = append(args, "--mlock")
 		log.Printf("mlock aktiviert: Modell wird im RAM gepinnt (kein Swap)")
+	}
+
+	// Multi-GPU Support: --main-gpu für spezifische GPU-Zuweisung
+	if s.config.MainGPU >= 0 {
+		args = append(args, "--main-gpu", fmt.Sprintf("%d", s.config.MainGPU))
+		log.Printf("🎮 Multi-GPU: Server verwendet GPU #%d", s.config.MainGPU)
 	}
 
 	// Vision/Multimodal Support: --mmproj für LLaVA und ähnliche Modelle
@@ -615,6 +636,25 @@ type VRAMInfo struct {
 	Available   bool   `json:"available"`
 }
 
+// GetAvailableVRAM gibt den verfügbaren VRAM in Bytes zurück
+// Verwendet für VRAM-Guard im Vision-Server
+func GetAvailableVRAM() int64 {
+	info := GetVRAMInfo()
+	if !info.Available {
+		return 0
+	}
+	return info.FreeMB * 1024 * 1024 // MB -> Bytes
+}
+
+// GetFreeVRAM gibt den freien VRAM in MB zurück
+func GetFreeVRAM() int64 {
+	info := GetVRAMInfo()
+	if !info.Available {
+		return 0 // Keine GPU oder nvidia-smi nicht verfügbar
+	}
+	return info.FreeMB
+}
+
 // GetVRAMInfo gibt Informationen über den verfügbaren GPU-Speicher zurück
 func GetVRAMInfo() VRAMInfo {
 	info := VRAMInfo{Available: false}
@@ -759,25 +799,161 @@ func (s *Server) EnsureVRAMAvailable(requiredMB int64) error {
 
 // EstimateModelVRAM schätzt den VRAM-Bedarf eines Modells basierend auf Dateigröße
 func EstimateModelVRAM(modelPath string) int64 {
+	return EstimateModelVRAMWithContext(modelPath, 8192) // Standard: 8K Context
+}
+
+// EstimateModelVRAMWithContext schätzt den VRAM-Bedarf mit spezifischem Context
+func EstimateModelVRAMWithContext(modelPath string, contextSize int) int64 {
 	info, err := os.Stat(modelPath)
 	if err != nil {
 		return 6000 // Standard: 6GB für mittleres Modell
 	}
 
 	fileSizeMB := info.Size() / (1024 * 1024)
+	modelName := strings.ToLower(filepath.Base(modelPath))
 
-	// Faustregeln für GGUF-Modelle:
-	// - Q4_K_M: VRAM ≈ Dateigröße × 1.1 + 500MB Overhead
-	// - Q5_K_M: VRAM ≈ Dateigröße × 1.05 + 500MB Overhead
-	// - Q8_0:   VRAM ≈ Dateigröße × 1.0 + 500MB Overhead
+	// Modell-Parameter aus Dateiname schätzen
+	var paramBillions float64 = 7 // Default: 7B
+	var numLayers int = 32        // Default: 32 Schichten
+	var hiddenDim int = 4096      // Default: 4096 (typisch für 7B)
 
-	// Konservative Schätzung: Dateigröße × 1.2 + 1GB Overhead für Context
-	estimatedMB := int64(float64(fileSizeMB)*1.2) + 1024
+	if strings.Contains(modelName, "70b") || strings.Contains(modelName, "72b") {
+		paramBillions = 70
+		numLayers = 80
+		hiddenDim = 8192
+	} else if strings.Contains(modelName, "34b") || strings.Contains(modelName, "33b") {
+		paramBillions = 34
+		numLayers = 60
+		hiddenDim = 8192
+	} else if strings.Contains(modelName, "13b") || strings.Contains(modelName, "14b") {
+		paramBillions = 13
+		numLayers = 40
+		hiddenDim = 5120
+	} else if strings.Contains(modelName, "9b") {
+		paramBillions = 9
+		numLayers = 42 // Gemma 2 9B hat 42 Schichten
+		hiddenDim = 3584
+	} else if strings.Contains(modelName, "8b") {
+		paramBillions = 8
+		numLayers = 32
+		hiddenDim = 4096
+	} else if strings.Contains(modelName, "7b") {
+		paramBillions = 7
+		numLayers = 32
+		hiddenDim = 4096
+	} else if strings.Contains(modelName, "3b") {
+		paramBillions = 3
+		numLayers = 26
+		hiddenDim = 2560
+	} else if strings.Contains(modelName, "1b") || strings.Contains(modelName, "1.5b") {
+		paramBillions = 1.5
+		numLayers = 16
+		hiddenDim = 2048
+	}
 
-	log.Printf("Modell %s: %.1f GB, geschätzter VRAM-Bedarf: %dMB",
-		filepath.Base(modelPath), float64(fileSizeMB)/1024, estimatedMB)
+	// KV-Cache Berechnung (realistisch):
+	// Für GQA-Modelle (Grouped Query Attention) ist die KV-Dimension kleiner als hidden_dim
+	kvDim := hiddenDim / 2 // Typisch: n_embd_k_gqa = n_embd / 2 bei GQA
+	if strings.Contains(modelName, "gemma") {
+		// Gemma verwendet GQA mit n_embd_k_gqa = 2048 für alle Größen
+		kvDim = 2048
+	}
+
+	// Formel: context_size * kv_dim * num_layers/2 * 2 (K+V) * bytes_per_element
+	// Bei GQA werden nur halb so viele Layer für KV verwendet
+	kvLayers := numLayers / 2
+	bytesPerElement := 2 // FP16
+	kvCacheBytes := int64(contextSize) * int64(kvDim) * int64(kvLayers) * 2 * int64(bytesPerElement)
+	kvCacheMB := kvCacheBytes / (1024 * 1024)
+
+	// Gemma 2 und ähnliche Modelle mit ISWA (Interleaved Sliding Window Attention)
+	// brauchen ZWEI separate KV-Caches (Non-SWA + SWA)
+	if strings.Contains(modelName, "gemma-2") || strings.Contains(modelName, "gemma2") {
+		kvCacheMB = kvCacheMB * 2
+		log.Printf("ISWA erkannt: KV-Cache verdoppelt für Gemma 2")
+	}
+
+	// CUDA Overhead (Context, Scratch Buffer, etc.)
+	cudaOverheadMB := int64(800) // 800MB sicherere Schätzung
+
+	// Gesamt: Modell + KV-Cache + Overhead
+	estimatedMB := int64(float64(fileSizeMB)*1.05) + kvCacheMB + cudaOverheadMB
+
+	log.Printf("VRAM-Schätzung %s (%.0fB): Modell=%.1fGB, Context=%d, Layers=%d, KV-Cache=%dMB, Gesamt=%dMB (%.1fGB)",
+		filepath.Base(modelPath), paramBillions, float64(fileSizeMB)/1024, contextSize, numLayers, kvCacheMB, estimatedMB, float64(estimatedMB)/1024)
 
 	return estimatedMB
+}
+
+// VRAMError ist ein spezieller Fehler für VRAM-Probleme
+type VRAMError struct {
+	Required   int64
+	Available  int64
+	ModelName  string
+	Suggestion string
+}
+
+func (e *VRAMError) Error() string {
+	return fmt.Sprintf("Nicht genug VRAM: %s benötigt ~%.1f GB, aber nur %.1f GB frei. %s",
+		e.ModelName, float64(e.Required)/1024, float64(e.Available)/1024, e.Suggestion)
+}
+
+// CheckVRAMAvailable prüft ob genug VRAM für das Modell verfügbar ist
+func CheckVRAMAvailable(modelPath string, contextSize int) error {
+	requiredMB := EstimateModelVRAMWithContext(modelPath, contextSize)
+	availableMB := GetFreeVRAM()
+
+	if availableMB < requiredMB {
+		modelName := filepath.Base(modelPath)
+		modelNameLower := strings.ToLower(modelName)
+
+		// Spezifische Empfehlungen basierend auf Modell und Problem
+		var suggestion string
+		deficit := requiredMB - availableMB
+
+		if strings.Contains(modelNameLower, "q8") || strings.Contains(modelNameLower, "f16") {
+			suggestion = "Empfehlung: Lade die Q4_K_M Version (ca. 50% weniger VRAM)"
+		} else if strings.Contains(modelNameLower, "9b") || strings.Contains(modelNameLower, "13b") || strings.Contains(modelNameLower, "14b") {
+			suggestion = "Empfehlung: Lade ein 7B Modell oder eine kleinere Quantisierung (Q3_K_M, IQ4_XS)"
+		} else if contextSize > 4096 && deficit < 2000 {
+			suggestion = fmt.Sprintf("Empfehlung: Reduziere Context von %d auf 4096 (spart ~%.0f MB)", contextSize, float64(deficit)*0.8)
+		} else {
+			suggestion = "Optionen: 1) Kleinere Quantisierung (Q4_K_M, Q3_K_M), 2) Kleineres Modell (7B statt 9B), 3) Context reduzieren"
+		}
+
+		return &VRAMError{
+			Required:   requiredMB,
+			Available:  availableMB,
+			ModelName:  modelName,
+			Suggestion: suggestion,
+		}
+	}
+	return nil
+}
+
+// CheckVRAMAvailableWithTotalGPU prüft ob genug VRAM für das Modell verfügbar ist,
+// wobei der gesamte GPU-Speicher berücksichtigt wird (für Model-Switch Szenarien)
+func CheckVRAMAvailableWithTotalGPU(modelPath string, contextSize int) error {
+	requiredMB := EstimateModelVRAMWithContext(modelPath, contextSize)
+
+	// Gesamten GPU-Speicher abfragen
+	vramInfo := GetVRAMInfo()
+	if !vramInfo.Available {
+		return nil // Keine GPU-Info, VRAM-Check überspringen
+	}
+
+	totalMB := vramInfo.TotalMB
+	modelName := filepath.Base(modelPath)
+
+	if requiredMB > totalMB {
+		return &VRAMError{
+			Required:   requiredMB,
+			Available:  totalMB,
+			ModelName:  modelName,
+			Suggestion: fmt.Sprintf("Modell benötigt ~%.1f GB, GPU hat nur %.1f GB. Wähle ein kleineres Modell oder niedrigere Quantisierung.", float64(requiredMB)/1024, float64(totalMB)/1024),
+		}
+	}
+	return nil
 }
 
 // IsRunning prüft ob der Server läuft
@@ -839,18 +1015,45 @@ func (s *Server) Restart() error {
 
 // SwitchModel wechselt zu einem anderen Modell
 func (s *Server) SwitchModel(modelPath string) error {
+	// Context-Größe automatisch anpassen wenn nötig
+	maxContext := GetModelMaxContext(modelPath)
+	contextToUse := s.config.ContextSize
+	if contextToUse > maxContext {
+		log.Printf("Context-Anpassung: %d → %d (Modell-Maximum)", contextToUse, maxContext)
+		contextToUse = maxContext
+	}
+
+	// ERSTE PRÜFUNG: Passt das Modell überhaupt in den gesamten GPU-Speicher?
+	// Diese Prüfung verhindert, dass wir das aktuelle Modell stoppen nur um festzustellen,
+	// dass das neue Modell sowieso nicht passt.
+	if err := CheckVRAMAvailableWithTotalGPU(modelPath, contextToUse); err != nil {
+		log.Printf("VRAM-Fehler (Gesamtprüfung): %s", err.Error())
+		return err
+	}
+
+	// ZWEITE PRÜFUNG: Ist genug freier VRAM vorhanden?
+	if err := CheckVRAMAvailable(modelPath, contextToUse); err != nil {
+		// Bei VRAM-Fehler: Prüfen ob nach Stoppen des aktuellen Modells genug frei wäre
+		if vramErr, ok := err.(*VRAMError); ok {
+			currentModelSize := EstimateModelVRAMWithContext(s.config.ModelPath, s.config.ContextSize)
+			if vramErr.Available+currentModelSize >= vramErr.Required {
+				// Nach Stoppen des aktuellen Modells sollte es passen
+				log.Printf("VRAM-Warnung: %s - nach Stoppen des aktuellen Modells sollte es passen", err.Error())
+			} else {
+				// Auch nach Stoppen nicht genug VRAM
+				log.Printf("VRAM-Fehler: %s", err.Error())
+				return err
+			}
+		}
+	}
+
 	if err := s.Stop(); err != nil {
 		return err
 	}
 
 	time.Sleep(2 * time.Second)
 
-	// Context-Größe automatisch anpassen wenn nötig
-	maxContext := GetModelMaxContext(modelPath)
-	if s.config.ContextSize > maxContext {
-		log.Printf("Context-Anpassung: %d → %d (Modell-Maximum)", s.config.ContextSize, maxContext)
-		s.config.ContextSize = maxContext
-	}
+	s.config.ContextSize = contextToUse
 
 	if err := s.Start(modelPath); err != nil {
 		return err

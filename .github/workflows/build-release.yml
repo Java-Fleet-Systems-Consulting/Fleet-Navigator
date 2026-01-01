@@ -86,7 +86,11 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          go build -ldflags="-s -w" -o dist/fleet-navigator-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./cmd/navigator
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"  # Remove 'v' prefix
+          BUILD_TIME=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
+          LDFLAGS="-s -w -X fleet-navigator/internal/updater.Version=${VERSION} -X 'fleet-navigator/internal/updater.BuildTime=${BUILD_TIME}'"
+          go build -ldflags="${LDFLAGS}" -o dist/fleet-navigator-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./cmd/navigator
 
       - name: Upload binary
         uses: actions/upload-artifact@v4

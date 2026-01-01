@@ -30,6 +30,11 @@ export const useStreamingStore = defineStore('streaming', () => {
   const currentRequestId = ref(null)
   const streamingEnabled = ref(true)
 
+  // Vision Chaining State
+  const isAnalyzingVision = ref(false)
+  const visionChainMessage = ref('')
+  const visionChainProgress = ref({ current: 0, total: 0 })
+
   // Context usage tracking (for progressbar)
   const contextUsage = ref({
     totalChatTokens: 0,
@@ -522,6 +527,8 @@ export const useStreamingStore = defineStore('streaming', () => {
       }
     } else if (parsed.type === 'model_swap') {
       handleModelSwap(parsed)
+    } else if (parsed.type === 'vision_chain') {
+      handleVisionChain(parsed, streamingMessage, updateMessage)
     } else if (parsed.type === 'delegation') {
       console.log('[SSE] Delegation:', parsed.expertName)
       const delegationMsg = {
@@ -572,6 +579,66 @@ export const useStreamingStore = defineStore('streaming', () => {
     }
   }
 
+  // Handle vision chain events
+  function handleVisionChain(parsed, streamingMessage, updateMessage) {
+    console.log('[SSE] Vision Chain:', parsed.status, parsed.message)
+
+    switch (parsed.status) {
+      case 'starting':
+        isAnalyzingVision.value = true
+        visionChainMessage.value = parsed.message || '🖼️ Analysiere Bild...'
+        visionChainProgress.value = { current: 0, total: parsed.images || 1 }
+        break
+
+      case 'model_swap':
+        visionChainMessage.value = parsed.message || '🔄 Lade Vision-Modell...'
+        break
+
+      case 'analyzing':
+        visionChainMessage.value = parsed.message || '🔍 Analysiere...'
+        visionChainProgress.value = {
+          current: parsed.current || 0,
+          total: parsed.total || 1
+        }
+        break
+
+      case 'intermediate':
+        // Zwischenergebnis der Vision-Analyse anzeigen
+        if (parsed.content && updateMessage) {
+          const visionMsg = {
+            role: 'SYSTEM',
+            content: parsed.content,
+            createdAt: new Date().toISOString(),
+            isVisionResult: true
+          }
+          updateMessage(null, visionMsg, true)
+        }
+        break
+
+      case 'complete':
+        visionChainMessage.value = parsed.message || '✅ Bildanalyse abgeschlossen'
+        setTimeout(() => {
+          isAnalyzingVision.value = false
+          visionChainMessage.value = ''
+          visionChainProgress.value = { current: 0, total: 0 }
+        }, 1000)
+        break
+
+      case 'restore':
+        visionChainMessage.value = parsed.message || '🔄 Wechsle zurück...'
+        break
+
+      case 'error':
+      case 'unavailable':
+        visionChainMessage.value = parsed.message || '⚠️ Vision nicht verfügbar'
+        setTimeout(() => {
+          isAnalyzingVision.value = false
+          visionChainMessage.value = ''
+        }, 3000)
+        break
+    }
+  }
+
   // Handle HTTP errors with user-friendly messages
   function handleHttpError(status) {
     switch (status) {
@@ -601,6 +668,11 @@ export const useStreamingStore = defineStore('streaming', () => {
     currentRequestId,
     streamingEnabled,
     contextUsage,
+
+    // Vision Chaining State
+    isAnalyzingVision,
+    visionChainMessage,
+    visionChainProgress,
 
     // Actions
     sendMessage,

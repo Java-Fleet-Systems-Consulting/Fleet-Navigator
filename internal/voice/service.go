@@ -10,11 +10,15 @@ import (
 
 // Service verwaltet Spracheingabe (STT) und Sprachausgabe (TTS)
 type Service struct {
-	dataDir     string
-	whisper     *WhisperSTT
-	piper       *PiperTTS
-	mu          sync.RWMutex
-	initialized bool
+	dataDir         string
+	whisper         *WhisperSTT
+	piper           *PiperTTS
+	wakeWordListener *WakeWordListener
+	mu              sync.RWMutex
+	initialized     bool
+
+	// Wake Word Callback - wird von außen gesetzt
+	OnWakeWordDetected func(word string, confidence float64)
 }
 
 // Config enthält die Konfiguration für den Voice-Service
@@ -356,4 +360,136 @@ func (s *Service) GetInstalledPiperVoices() []string {
 	}
 
 	return installed
+}
+
+// ==================== Wake Word Listener ====================
+
+// WakeWordListenerStatus enthält den Status des Wake Word Listeners
+type WakeWordListenerStatus struct {
+	Running         bool   `json:"running"`
+	Available       bool   `json:"available"`
+	AudioCaptureTool string `json:"audioCaptureTool,omitempty"`
+	Error           string `json:"error,omitempty"`
+	WhisperReady    bool   `json:"whisperReady"`
+}
+
+// GetWakeWordStatus gibt den Status des Wake Word Listeners zurück
+func (s *Service) GetWakeWordStatus() WakeWordListenerStatus {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	status := WakeWordListenerStatus{}
+
+	// Prüfe ob Audio-Capture verfügbar ist
+	capture := NewNativeAudioCapture(DefaultNativeAudioCaptureConfig())
+	available, tool := capture.IsAvailable()
+	status.Available = available
+	status.AudioCaptureTool = tool
+	if !available {
+		status.Error = tool
+	}
+
+	// Prüfe ob Whisper bereit ist
+	if s.whisper != nil {
+		whisperStatus := s.whisper.GetStatus()
+		status.WhisperReady = whisperStatus.Available
+	}
+
+	// Prüfe ob Listener läuft
+	if s.wakeWordListener != nil {
+		status.Running = s.wakeWordListener.IsRunning()
+	}
+
+	return status
+}
+
+// StartWakeWordListener startet den Wake Word Listener
+func (s *Service) StartWakeWordListener(wakeWords []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Bereits laufend?
+	if s.wakeWordListener != nil && s.wakeWordListener.IsRunning() {
+		return nil
+	}
+
+	// Whisper prüfen
+	if s.whisper == nil {
+		return fmt.Errorf("Whisper nicht initialisiert")
+	}
+
+	whisperStatus := s.whisper.GetStatus()
+	if !whisperStatus.Available {
+		return fmt.Errorf("Whisper nicht verfügbar - Binary: %v, Modell: %v", whisperStatus.BinaryFound, whisperStatus.ModelFound)
+	}
+
+	// Default Wake Words
+	if len(wakeWords) == 0 {
+		wakeWords = []string{"hey ewa", "hallo ewa", "ewa"}
+	}
+
+	// Listener erstellen
+	config := DefaultWakeWordListenerConfig()
+	s.wakeWordListener = NewWakeWordListener(s.whisper, wakeWords, config)
+
+	// Callback setzen
+	s.wakeWordListener.OnWakeWord = func(word string, confidence float64) {
+		log.Printf("🎤 Wake Word erkannt: '%s' (%.0f%%)", word, confidence*100)
+		if s.OnWakeWordDetected != nil {
+			s.OnWakeWordDetected(word, confidence)
+		}
+	}
+
+	// Starten
+	if err := s.wakeWordListener.Start(); err != nil {
+		s.wakeWordListener = nil
+		return fmt.Errorf("Wake Word Listener starten: %w", err)
+	}
+
+	log.Printf("🎤 Wake Word Listener gestartet - lauscht auf: %v", wakeWords)
+	return nil
+}
+
+// StopWakeWordListener stoppt den Wake Word Listener
+func (s *Service) StopWakeWordListener() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.wakeWordListener == nil {
+		return nil
+	}
+
+	if err := s.wakeWordListener.Stop(); err != nil {
+		return err
+	}
+
+	s.wakeWordListener = nil
+	log.Printf("🎤 Wake Word Listener gestoppt")
+	return nil
+}
+
+// IsWakeWordListenerRunning gibt zurück ob der Listener läuft
+func (s *Service) IsWakeWordListenerRunning() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.wakeWordListener == nil {
+		return false
+	}
+	return s.wakeWordListener.IsRunning()
+}
+
+// SetWakeWords ändert die Wake Words (zur Laufzeit)
+func (s *Service) SetWakeWords(words []string) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.wakeWordListener != nil {
+		s.wakeWordListener.SetWakeWords(words)
+	}
+}
+
+// GetAudioDevices gibt verfügbare Audio-Eingabegeräte zurück
+func (s *Service) GetAudioDevices() ([]AudioDevice, error) {
+	return ListAudioDevices()
 }

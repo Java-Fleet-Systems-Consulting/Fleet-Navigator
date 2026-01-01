@@ -191,21 +191,79 @@
 
       <!-- Attachments (for user messages with files) -->
       <div v-if="parsedAttachments.length > 0" class="mb-3 flex flex-wrap gap-2">
-        <div
-          v-for="(attachment, index) in parsedAttachments"
-          :key="index"
-          class="
-            flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs
-            bg-gray-100/80 dark:bg-gray-700/80
-            border border-gray-200/50 dark:border-gray-600/50
-            text-gray-700 dark:text-gray-300
-          "
-        >
-          <component :is="getAttachmentIcon(attachment.type)" class="w-3.5 h-3.5 text-fleet-orange-500" />
-          <span class="max-w-[120px] truncate">{{ attachment.name }}</span>
-          <span class="text-gray-400 dark:text-gray-500">{{ formatFileSize(attachment.size) }}</span>
-        </div>
+        <!-- Image Thumbnails -->
+        <template v-for="(attachment, index) in parsedAttachments" :key="index">
+          <!-- Image as clickable thumbnail -->
+          <div
+            v-if="attachment.type === 'image' && attachment.content"
+            class="
+              relative w-20 h-20 rounded-lg overflow-hidden cursor-pointer
+              border-2 border-fleet-orange-400/50 dark:border-fleet-orange-500/50
+              hover:border-fleet-orange-500 dark:hover:border-fleet-orange-400
+              hover:shadow-lg transition-all duration-200
+              group
+            "
+            @click="openImageModal(attachment)"
+          >
+            <img
+              :src="'data:image/png;base64,' + attachment.content"
+              :alt="attachment.name"
+              class="w-full h-full object-cover"
+            />
+            <!-- Camera badge -->
+            <div class="absolute top-1 left-1 px-1 py-0.5 rounded bg-fleet-orange-500/80 text-[9px] text-white font-medium">
+              📷
+            </div>
+            <!-- Hover overlay with zoom icon -->
+            <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+              </svg>
+            </div>
+          </div>
+          <!-- Non-image files as icon badges -->
+          <div
+            v-else
+            class="
+              flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs
+              bg-gray-100/80 dark:bg-gray-700/80
+              border border-gray-200/50 dark:border-gray-600/50
+              text-gray-700 dark:text-gray-300
+            "
+          >
+            <component :is="getAttachmentIcon(attachment.type)" class="w-3.5 h-3.5 text-fleet-orange-500" />
+            <span class="max-w-[120px] truncate">{{ attachment.name }}</span>
+            <span class="text-gray-400 dark:text-gray-500">{{ formatFileSize(attachment.size) }}</span>
+          </div>
+        </template>
       </div>
+
+      <!-- Image Modal for full view -->
+      <Teleport to="body">
+        <Transition name="fade">
+          <div
+            v-if="showImageModal"
+            class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+            @click.self="showImageModal = false"
+          >
+            <div class="relative max-w-[90vw] max-h-[90vh]">
+              <img
+                :src="'data:image/png;base64,' + selectedImage?.content"
+                :alt="selectedImage?.name"
+                class="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+              />
+              <button
+                @click="showImageModal = false"
+                class="absolute -top-3 -right-3 p-2 bg-white dark:bg-gray-800 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                <svg class="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </Transition>
+      </Teleport>
 
       <!-- Message Content -->
       <div
@@ -340,6 +398,10 @@ const isSpeaking = ref(false)
 const isLoadingTTS = ref(false)
 let currentAudio = null
 
+// Image Modal State
+const showImageModal = ref(false)
+const selectedImage = ref(null)
+
 // TTS Enabled (from localStorage for quick access)
 const ttsEnabled = computed(() => {
   const stored = localStorage.getItem('ttsEnabled')
@@ -417,6 +479,12 @@ function getAttachmentIcon(type) {
     case 'csv': return TableCellsIcon
     default: return DocumentTextIcon
   }
+}
+
+// Open image in full-screen modal
+function openImageModal(attachment) {
+  selectedImage.value = attachment
+  showImageModal.value = true
 }
 
 // formatFileSize importiert aus useFormatters.js
@@ -959,5 +1027,16 @@ async function speakText() {
 
 :deep(.code-copy-btn:active) {
   transform: scale(0.95);
+}
+
+/* Fade transition for modal */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>

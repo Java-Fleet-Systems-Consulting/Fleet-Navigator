@@ -75,6 +75,10 @@
     "offline": "Çevrimdışı",
     "serverRunning": "Sunucu 2026 portunda çalışıyor",
     "serverNotReachable": "Sunucuya ulaşılamıyor",
+    "chatServerRunning": "Sohbet sunucusu çalışıyor (port 2026)",
+    "chatServerOffline": "Sohbet sunucusu durduruldu",
+    "visionNotConfigured": "Görüntü sunucusu yapılandırılmadı",
+    "visionOffline": "Görüntü sunucusu durduruldu (isteğe bağlı)",
     "logout": "Çıkış",
     "logoutConfirm": "Gerçekten çıkmak istiyor musunuz?",
     "renameChat": "Sohbeti yeniden adlandır",
@@ -582,6 +586,13 @@
         "languages": "Diller",
         "download": "Tesseract'ı Yükle",
         "ready": "Tesseract kullanıma hazır"
+      },
+      "visionModel": {
+        "title": "Görüntü Modeli",
+        "description": "Görüntü analizi ve ekran görüntüsü işlemeyi sağlar. Vision Chaining için gereklidir.",
+        "model": "Model",
+        "download": "MiniCPM-V Yükle (5.4 GB)",
+        "ready": "Görüntü modeli kullanıma hazır"
       }
     },
     "danger": {
@@ -620,6 +631,8 @@
       "noVisionModels": "Görüntü modeli bulunamadı. Model Store'dan görüntü modellerini indirin.",
       "visionChaining": "Görüntü Zincirleme",
       "visionChainingDesc": "Görüntü Modeli Çıktısı → Ana Model",
+      "visionServerTimeout": "Görüntü Sunucu Zaman Aşımı",
+      "visionServerTimeoutDesc": "Görüntü Sunucusu, Sohbet Sunucusuna paralel çalışır ve hareketsizlikten sonra otomatik olarak durur.",
       "osMateTitle": "OS Mate - Dosya Arama (RAG)",
       "osMateDesc": "Yerel belge araması için klasörleri yapılandırın. Dizin PDF, DOCX ve ODT dosyalarını tarar.",
       "filesIndexed": "dosya dizinlendi",
@@ -1501,7 +1514,9 @@
     "uploadFailed": "Yükleme başarısız",
     "uploadError": "Yükleme hatası",
     "pagesUploaded": "{name}: {count} sayfa",
-    "fileUploaded": "{name} yüklendi"
+    "fileUploaded": "{name} yüklendi",
+    "imagePasted": "Panodan görsel yapıştırıldı",
+    "imageDropped": "Görsel sürükle-bırak ile eklendi"
   },
   "personalInfo": {
     "header": "Belgeler için Kişisel Veriler",

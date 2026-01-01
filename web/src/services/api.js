@@ -1017,6 +1017,17 @@ export default {
   },
 
   /**
+   * Prüft den Vision-Server Status (separater Server für Bildanalyse auf Port 2024)
+   * @returns {Promise<{available: boolean, running: boolean, ready: boolean, modelName: string, port: number}>}
+   */
+  async getVisionServerStatus() {
+    const response = await api.get('/visionserver/status', {
+      timeout: 5000
+    })
+    return response.data
+  },
+
+  /**
    * Prüft den AI-Startup-Status (für Loading-Animation)
    * @returns {Promise<{inProgress: boolean, complete: boolean, message: string, error: string|null, serverOnline: boolean}>}
    */

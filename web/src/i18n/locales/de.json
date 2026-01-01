@@ -75,6 +75,10 @@
     "offline": "Offline",
     "serverRunning": "Server läuft auf Port 2026",
     "serverNotReachable": "Server nicht erreichbar",
+    "chatServerRunning": "Chat-Server läuft (Port 2026)",
+    "chatServerOffline": "Chat-Server gestoppt",
+    "visionNotConfigured": "Vision-Server nicht konfiguriert",
+    "visionOffline": "Vision-Server gestoppt (On-Demand)",
     "logout": "Abmelden",
     "logoutConfirm": "Möchten Sie sich wirklich abmelden?",
     "renameChat": "Chat umbenennen",
@@ -582,6 +586,13 @@
         "languages": "Sprachen",
         "download": "Tesseract installieren",
         "ready": "Tesseract ist einsatzbereit"
+      },
+      "visionModel": {
+        "title": "Vision-Modell",
+        "description": "Ermöglicht Bildanalyse und Screenshot-Verarbeitung. Benötigt für Vision-Chaining.",
+        "model": "Modell",
+        "download": "MiniCPM-V installieren (5.4 GB)",
+        "ready": "Vision-Modell ist einsatzbereit"
       }
     },
     "danger": {
@@ -620,6 +631,8 @@
       "noVisionModels": "Keine Vision-Modelle gefunden. Lade Vision-Modelle aus dem Model Store herunter.",
       "visionChaining": "Vision-Chaining",
       "visionChainingDesc": "Vision Model Output → Haupt-Model",
+      "visionServerTimeout": "Vision-Server Timeout",
+      "visionServerTimeoutDesc": "Der Vision-Server läuft parallel zum Chat-Server und stoppt nach Inaktivität automatisch.",
       "osMateTitle": "OS Mate - Dateisuche (RAG)",
       "osMateDesc": "Konfiguriere Ordner für die lokale Dokumentensuche. Der Index durchsucht PDF, DOCX und ODT Dateien.",
       "filesIndexed": "Dateien indexiert",
@@ -1457,7 +1470,9 @@
     "uploadFailed": "Upload fehlgeschlagen",
     "uploadError": "Upload-Fehler",
     "pagesUploaded": "{name}: {count} Seiten",
-    "fileUploaded": "{name} hochgeladen"
+    "fileUploaded": "{name} hochgeladen",
+    "imagePasted": "Bild aus Zwischenablage eingefügt",
+    "imageDropped": "Bild per Drag & Drop eingefügt"
   },
   "personalInfo": {
     "header": "Persönliche Daten für Dokumente",

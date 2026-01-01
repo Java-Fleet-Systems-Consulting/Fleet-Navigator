@@ -75,6 +75,10 @@
     "offline": "Offline",
     "serverRunning": "Server running on port 2026",
     "serverNotReachable": "Server not reachable",
+    "chatServerRunning": "Chat server running (port 2026)",
+    "chatServerOffline": "Chat server stopped",
+    "visionNotConfigured": "Vision server not configured",
+    "visionOffline": "Vision server stopped (on-demand)",
     "logout": "Logout",
     "logoutConfirm": "Do you really want to logout?",
     "renameChat": "Rename chat",
@@ -582,6 +586,13 @@
         "languages": "Languages",
         "download": "Install Tesseract",
         "ready": "Tesseract is ready to use"
+      },
+      "visionModel": {
+        "title": "Vision Model",
+        "description": "Enables image analysis and screenshot processing. Required for Vision Chaining.",
+        "model": "Model",
+        "download": "Install MiniCPM-V (5.4 GB)",
+        "ready": "Vision model is ready to use"
       }
     },
     "danger": {
@@ -620,6 +631,8 @@
       "noVisionModels": "No vision models found. Download vision models from the Model Store.",
       "visionChaining": "Vision Chaining",
       "visionChainingDesc": "Vision Model Output → Main Model",
+      "visionServerTimeout": "Vision Server Timeout",
+      "visionServerTimeoutDesc": "The Vision Server runs in parallel to the Chat Server and automatically stops after inactivity.",
       "osMateTitle": "OS Mate - File Search (RAG)",
       "osMateDesc": "Configure folders for local document search. The index searches PDF, DOCX and ODT files.",
       "filesIndexed": "files indexed",
@@ -1457,7 +1470,9 @@
     "uploadFailed": "Upload failed",
     "uploadError": "Upload error",
     "pagesUploaded": "{name}: {count} pages",
-    "fileUploaded": "{name} uploaded"
+    "fileUploaded": "{name} uploaded",
+    "imagePasted": "Image pasted from clipboard",
+    "imageDropped": "Image added via drag & drop"
   },
   "personalInfo": {
     "header": "Personal Data for Documents",

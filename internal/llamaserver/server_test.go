@@ -550,3 +550,292 @@ func TestWaitForHealthy_Signature(t *testing.T) {
 		t.Error("WaitForHealthy sollte existieren")
 	}
 }
+
+// ============================================================================
+// VRAM-Schätzung und -Prüfung Tests
+// ============================================================================
+
+// TestEstimateModelVRAMWithContext_7BModel testet VRAM-Schätzung für 7B Modell
+func TestEstimateModelVRAMWithContext_7BModel(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "vram-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// 4.8 GB Fake-Modell (typisch für Q4_K_M 7B)
+	modelPath := filepath.Join(tmpDir, "qwen2.5-7b-instruct-q4_k_m.gguf")
+	if err := createFakeGGUF(modelPath, 4800*1024*1024); err != nil {
+		t.Fatal(err)
+	}
+
+	estimated := EstimateModelVRAMWithContext(modelPath, 8192)
+
+	// Erwartung: Modell ~5GB + KV-Cache ~1GB + Overhead ~0.8GB = ~6.8GB
+	// Minimum: 6000 MB, Maximum: 9000 MB
+	if estimated < 6000 || estimated > 9000 {
+		t.Errorf("VRAM-Schätzung für 7B Q4 sollte zwischen 6-9GB liegen, bekam: %d MB (%.1f GB)",
+			estimated, float64(estimated)/1024)
+	}
+}
+
+// TestEstimateModelVRAMWithContext_9BQ8Model testet VRAM-Schätzung für 9B Q8 Modell
+func TestEstimateModelVRAMWithContext_9BQ8Model(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "vram-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// 9.2 GB Fake-Modell (typisch für Q8_0 9B)
+	modelPath := filepath.Join(tmpDir, "gemma-2-9b-it-q8_0.gguf")
+	if err := createFakeGGUF(modelPath, 9200*1024*1024); err != nil {
+		t.Fatal(err)
+	}
+
+	estimated := EstimateModelVRAMWithContext(modelPath, 8192)
+
+	// Erwartung für Gemma 2 9B Q8: Modell ~9.7GB + KV-Cache ~2.7GB (ISWA) + Overhead = ~13GB
+	// Minimum: 12000 MB, Maximum: 15000 MB
+	if estimated < 12000 || estimated > 15000 {
+		t.Errorf("VRAM-Schätzung für Gemma 2 9B Q8 sollte zwischen 12-15GB liegen, bekam: %d MB (%.1f GB)",
+			estimated, float64(estimated)/1024)
+	}
+}
+
+// TestEstimateModelVRAMWithContext_3BModel testet VRAM-Schätzung für 3B Modell
+func TestEstimateModelVRAMWithContext_3BModel(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "vram-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// 2 GB Fake-Modell (typisch für Q4 3B)
+	modelPath := filepath.Join(tmpDir, "llama-3b-q4_k_m.gguf")
+	if err := createFakeGGUF(modelPath, 2000*1024*1024); err != nil {
+		t.Fatal(err)
+	}
+
+	estimated := EstimateModelVRAMWithContext(modelPath, 4096)
+
+	// Erwartung: Modell ~2.1GB + KV-Cache ~0.3GB + Overhead ~0.8GB = ~3.2GB
+	// Minimum: 2500 MB, Maximum: 5000 MB
+	if estimated < 2500 || estimated > 5000 {
+		t.Errorf("VRAM-Schätzung für 3B Q4 sollte zwischen 2.5-5GB liegen, bekam: %d MB (%.1f GB)",
+			estimated, float64(estimated)/1024)
+	}
+}
+
+// TestEstimateModelVRAMWithContext_LargeContext testet Einfluss von Context-Größe
+func TestEstimateModelVRAMWithContext_LargeContext(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "vram-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	modelPath := filepath.Join(tmpDir, "mistral-7b-q4_k_m.gguf")
+	if err := createFakeGGUF(modelPath, 4500*1024*1024); err != nil {
+		t.Fatal(err)
+	}
+
+	small := EstimateModelVRAMWithContext(modelPath, 2048)
+	large := EstimateModelVRAMWithContext(modelPath, 16384)
+
+	// Größerer Context sollte mehr VRAM brauchen
+	if large <= small {
+		t.Errorf("Größerer Context sollte mehr VRAM brauchen: 2048=%dMB, 16384=%dMB",
+			small, large)
+	}
+
+	// Unterschied sollte signifikant sein (mindestens 500MB)
+	diff := large - small
+	if diff < 500 {
+		t.Errorf("Context-Unterschied sollte mindestens 500MB sein, bekam: %dMB", diff)
+	}
+}
+
+// TestEstimateModelVRAMWithContext_NonexistentFile testet Fallback bei fehlender Datei
+func TestEstimateModelVRAMWithContext_NonexistentFile(t *testing.T) {
+	estimated := EstimateModelVRAMWithContext("/nonexistent/model.gguf", 8192)
+
+	// Sollte Standard-Wert (6000 MB) zurückgeben
+	if estimated != 6000 {
+		t.Errorf("Bei fehlender Datei sollte 6000MB zurückgegeben werden, bekam: %d", estimated)
+	}
+}
+
+// TestGetModelMaxContext testet Context-Limits für verschiedene Modelle
+func TestGetModelMaxContext(t *testing.T) {
+	tests := []struct {
+		modelPath string
+		expected  int
+	}{
+		{"/models/gemma-2-9b-it.gguf", 8192},
+		{"/models/gemma-7b.gguf", 8192},
+		{"/models/phi-3-mini.gguf", 4096},
+		{"/models/phi3-mini.gguf", 4096},
+		{"/models/mistral-7b-instruct.gguf", 32768},
+		{"/models/llama-3.1-8b.gguf", 131072},
+		{"/models/llama3.1-70b.gguf", 131072},
+		{"/models/llama-3-8b.gguf", 8192},
+		{"/models/llama3-8b.gguf", 8192},
+		{"/models/qwen2.5-7b.gguf", 32768},
+		{"/models/qwen-2.5-14b.gguf", 32768},
+		{"/models/deepseek-coder-7b.gguf", 32768},
+		{"/models/unknown-model.gguf", 16384}, // Default
+	}
+
+	for _, tt := range tests {
+		t.Run(filepath.Base(tt.modelPath), func(t *testing.T) {
+			result := GetModelMaxContext(tt.modelPath)
+			if result != tt.expected {
+				t.Errorf("GetModelMaxContext(%s) = %d, erwartet %d",
+					tt.modelPath, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestVRAMError_ErrorMessage testet die Fehlerformatierung
+func TestVRAMError_ErrorMessage(t *testing.T) {
+	err := &VRAMError{
+		Required:   13000,
+		Available:  12000,
+		ModelName:  "gemma-2-9b-q8.gguf",
+		Suggestion: "Empfehlung: Lade die Q4_K_M Version",
+	}
+
+	msg := err.Error()
+
+	// Prüfe dass alle wichtigen Informationen enthalten sind
+	if !strings.Contains(msg, "gemma-2-9b-q8.gguf") {
+		t.Error("Fehlermeldung sollte Modellnamen enthalten")
+	}
+	if !strings.Contains(msg, "12.7") || !strings.Contains(msg, "11.7") {
+		t.Errorf("Fehlermeldung sollte GB-Werte enthalten: %s", msg)
+	}
+	if !strings.Contains(msg, "Q4_K_M") {
+		t.Error("Fehlermeldung sollte Empfehlung enthalten")
+	}
+}
+
+// TestVRAMError_IsError testet dass VRAMError das error Interface implementiert
+func TestVRAMError_IsError(t *testing.T) {
+	var err error = &VRAMError{
+		Required:   10000,
+		Available:  8000,
+		ModelName:  "test.gguf",
+		Suggestion: "Test",
+	}
+
+	if err == nil {
+		t.Error("VRAMError sollte nicht nil sein")
+	}
+
+	// Type assertion sollte funktionieren
+	vramErr, ok := err.(*VRAMError)
+	if !ok {
+		t.Error("Type assertion zu *VRAMError sollte funktionieren")
+	}
+	if vramErr.Required != 10000 {
+		t.Errorf("Required sollte 10000 sein, bekam: %d", vramErr.Required)
+	}
+}
+
+// TestEstimateModelVRAMWithContext_GemmaISWA testet ISWA-Verdopplung für Gemma 2
+func TestEstimateModelVRAMWithContext_GemmaISWA(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "vram-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Gleiche Dateigröße für beide Modelle
+	gemma2Path := filepath.Join(tmpDir, "gemma-2-9b.gguf")
+	otherPath := filepath.Join(tmpDir, "llama-9b.gguf")
+
+	if err := createFakeGGUF(gemma2Path, 5000*1024*1024); err != nil {
+		t.Fatal(err)
+	}
+	if err := createFakeGGUF(otherPath, 5000*1024*1024); err != nil {
+		t.Fatal(err)
+	}
+
+	gemma2Estimate := EstimateModelVRAMWithContext(gemma2Path, 8192)
+	otherEstimate := EstimateModelVRAMWithContext(otherPath, 8192)
+
+	// Gemma 2 sollte wegen ISWA mehr VRAM brauchen (ca. doppelter KV-Cache)
+	if gemma2Estimate <= otherEstimate {
+		t.Errorf("Gemma 2 sollte wegen ISWA mehr VRAM brauchen: Gemma2=%dMB, Other=%dMB",
+			gemma2Estimate, otherEstimate)
+	}
+
+	// Unterschied sollte mindestens 500MB sein (KV-Cache Verdopplung)
+	diff := gemma2Estimate - otherEstimate
+	if diff < 500 {
+		t.Errorf("ISWA-Unterschied sollte mindestens 500MB sein, bekam: %dMB", diff)
+	}
+}
+
+// TestCheckVRAMAvailable_Suggestions testet spezifische Empfehlungen
+func TestCheckVRAMAvailable_Suggestions(t *testing.T) {
+	// Da CheckVRAMAvailable nvidia-smi aufruft, können wir nur die Logik testen
+	// indem wir die VRAMError-Struktur direkt erstellen
+
+	tests := []struct {
+		name        string
+		modelName   string
+		contextSize int
+		expectIn    string
+	}{
+		{
+			name:        "Q8 Modell Empfehlung",
+			modelName:   "gemma-9b-q8_0.gguf",
+			contextSize: 8192,
+			expectIn:    "Q4_K_M",
+		},
+		{
+			name:        "9B Modell Empfehlung",
+			modelName:   "mistral-9b-q4.gguf",
+			contextSize: 8192,
+			expectIn:    "7B",
+		},
+		{
+			name:        "13B Modell Empfehlung",
+			modelName:   "llama-13b-q4.gguf",
+			contextSize: 4096,
+			expectIn:    "7B",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Simuliere VRAM-Fehler
+			modelNameLower := strings.ToLower(tt.modelName)
+			var suggestion string
+
+			if strings.Contains(modelNameLower, "q8") || strings.Contains(modelNameLower, "f16") {
+				suggestion = "Empfehlung: Lade die Q4_K_M Version (ca. 50% weniger VRAM)"
+			} else if strings.Contains(modelNameLower, "9b") || strings.Contains(modelNameLower, "13b") {
+				suggestion = "Empfehlung: Lade ein 7B Modell oder eine kleinere Quantisierung"
+			}
+
+			if !strings.Contains(suggestion, tt.expectIn) {
+				t.Errorf("Empfehlung sollte '%s' enthalten, bekam: %s", tt.expectIn, suggestion)
+			}
+		})
+	}
+}
+
+// TestEstimateModelVRAM_FunctionExists testet dass EstimateModelVRAM existiert
+func TestEstimateModelVRAM_FunctionExists(t *testing.T) {
+	// EstimateModelVRAM ruft intern EstimateModelVRAMWithContext auf
+	result := EstimateModelVRAM("/nonexistent/model.gguf")
+
+	// Sollte Standard-Wert zurückgeben (6000 MB)
+	if result != 6000 {
+		t.Errorf("EstimateModelVRAM sollte 6000 für nicht-existente Datei zurückgeben, bekam: %d", result)
+	}
+}

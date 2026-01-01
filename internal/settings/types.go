@@ -46,6 +46,9 @@ type VisionSettings struct {
 	ModelPath   string `json:"modelPath"`   // Pfad zum GGUF
 	MmprojPath  string `json:"mmprojPath"`  // Pfad zur mmproj-Datei
 	AutoRestore bool   `json:"autoRestore"` // Nach Vision Chat-Modell wiederherstellen
+	IdleTimeout int    `json:"idleTimeout"` // Vision-Server Idle-Timeout in Sekunden (0 = 5 Min Default, -1 = kein Timeout)
+	GPULayers   int    `json:"gpuLayers"`   // GPU Layer: 0 = CPU/RAM, 99 = alle auf GPU (Default)
+	AutoStart   bool   `json:"autoStart"`   // Vision-Server beim App-Start hochfahren (statt On-Demand)
 }
 
 // ChainingSettings enthält Model-Chaining-Konfiguration
@@ -125,4 +128,42 @@ type WebSearchSettings struct {
 	BraveAPIKey    string   `json:"braveApiKey"`    // Brave Search API Key
 	CustomInstance string   `json:"customInstance"` // Eigene SearXNG Instanz
 	Instances      []string `json:"instances"`      // Fallback-Instanzen
+}
+
+// --- GPU Settings ---
+
+// GPUAssignment beschreibt die GPU-Zuweisung für einen Server
+type GPUAssignment struct {
+	GPUID       int    `json:"gpuId"`       // GPU Index (-1 = CPU)
+	GPUName     string `json:"gpuName"`     // GPU Name für Anzeige
+	Backend     string `json:"backend"`     // cuda, rocm, vulkan, cpu
+	GPULayers   int    `json:"gpuLayers"`   // 0 = CPU, 99 = alle Layer auf GPU
+	VRAMLimit   int64  `json:"vramLimit"`   // VRAM-Limit in Bytes (0 = kein Limit)
+}
+
+// GPUSettings enthält Multi-GPU-Konfiguration
+type GPUSettings struct {
+	AutoDetect  bool          `json:"autoDetect"`  // Automatische GPU-Erkennung
+	ChatGPU     GPUAssignment `json:"chatGpu"`     // GPU für Chat-Server
+	VisionGPU   GPUAssignment `json:"visionGpu"`   // GPU für Vision-Server
+	Strategy    string        `json:"strategy"`    // Strategie-Beschreibung
+	LastDetect  string        `json:"lastDetect"`  // Zeitpunkt der letzten Erkennung
+}
+
+// DefaultGPUSettings gibt die Standard-GPU-Einstellungen zurück
+func DefaultGPUSettings() GPUSettings {
+	return GPUSettings{
+		AutoDetect: true,
+		ChatGPU: GPUAssignment{
+			GPUID:     -1, // Auto-Detect
+			Backend:   "auto",
+			GPULayers: 99,
+		},
+		VisionGPU: GPUAssignment{
+			GPUID:     -1,
+			Backend:   "auto",
+			GPULayers: 99,
+		},
+		Strategy: "Automatische Erkennung",
+	}
 }

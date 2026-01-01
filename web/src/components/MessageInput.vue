@@ -6,17 +6,50 @@
 
     <div class="max-w-6xl mx-auto relative">
       <!-- Uploaded Files Display -->
-      <TransitionGroup name="file" tag="div" class="mb-2 flex flex-wrap gap-2 max-h-24 overflow-y-auto custom-scrollbar">
+      <TransitionGroup name="file" tag="div" class="mb-2 flex flex-wrap gap-2 max-h-32 overflow-y-auto custom-scrollbar">
+        <!-- Bild-Vorschau (Thumbnail) -->
         <div
           v-for="(file, index) in uploadedFiles"
-          :key="index"
-          class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-700/50 border border-gray-600/50 text-sm group"
+          :key="file.name + '-' + index"
+          :class="[
+            'relative group rounded-lg overflow-hidden border transition-all',
+            file.type === 'image'
+              ? 'w-20 h-20 bg-gray-800 border-fleet-orange-500/50 hover:border-fleet-orange-400'
+              : 'flex items-center gap-2 px-3 py-1.5 bg-gray-700/50 border-gray-600/50'
+          ]"
         >
-          <component :is="getFileIcon(file.type)" class="w-4 h-4 text-fleet-orange-400 flex-shrink-0" />
-          <span class="max-w-[120px] truncate text-gray-300">{{ file.name }}</span>
-          <button @click="removeFile(index)" class="p-0.5 rounded text-gray-500 hover:text-red-400 transition-colors">
-            <XMarkIcon class="w-3.5 h-3.5" />
-          </button>
+          <!-- Bild-Thumbnail -->
+          <template v-if="file.type === 'image' && file.base64Content">
+            <img
+              :src="'data:image/png;base64,' + file.base64Content"
+              :alt="file.name"
+              class="w-full h-full object-cover"
+            />
+            <!-- Bild-Overlay mit Name -->
+            <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+              <span class="absolute bottom-1 left-1 right-6 text-[10px] text-white truncate">{{ file.name }}</span>
+            </div>
+            <!-- Löschen-Button für Bilder -->
+            <button
+              @click="removeFile(index)"
+              class="absolute top-1 right-1 p-1 rounded-full bg-black/50 text-white/70 hover:text-red-400 hover:bg-black/70 transition-all opacity-0 group-hover:opacity-100"
+            >
+              <XMarkIcon class="w-3.5 h-3.5" />
+            </button>
+            <!-- Bild-Badge -->
+            <div class="absolute top-1 left-1 px-1 py-0.5 rounded bg-fleet-orange-500/80 text-[9px] text-white font-medium">
+              📷
+            </div>
+          </template>
+
+          <!-- Nicht-Bild Dateien (PDF, Text, etc.) -->
+          <template v-else>
+            <component :is="getFileIcon(file.type)" class="w-4 h-4 text-fleet-orange-400 flex-shrink-0" />
+            <span class="max-w-[120px] truncate text-gray-300 text-sm">{{ file.name }}</span>
+            <button @click="removeFile(index)" class="p-0.5 rounded text-gray-500 hover:text-red-400 transition-colors">
+              <XMarkIcon class="w-3.5 h-3.5" />
+            </button>
+          </template>
         </div>
       </TransitionGroup>
 
@@ -36,7 +69,14 @@
       </Transition>
 
       <!-- Main Input Tile - Seamless Style (transparent to match chat background) -->
-      <div class="input-tile rounded-2xl bg-transparent border border-gray-300/30 dark:border-gray-700/50 overflow-hidden">
+      <div
+        class="input-tile rounded-2xl bg-transparent border overflow-hidden transition-colors"
+        :class="isDragging ? 'border-fleet-orange-500 border-2 bg-fleet-orange-500/10' : 'border-gray-300/30 dark:border-gray-700/50'"
+        @dragover.prevent="handleDragOver"
+        @dragleave.prevent="handleDragLeave"
+        @drop.prevent="handleDrop"
+        @paste="handlePaste"
+      >
         <!-- Textarea Area -->
         <div class="p-5 pb-3">
           <textarea
@@ -362,6 +402,7 @@ const isUploading = ref(false)
 const uploadProgress = ref('')
 const errorMessage = ref('')
 const webSearchEnabled = ref(false)
+const isDragging = ref(false)
 
 // Voice Recording State
 const isRecording = ref(false)
@@ -595,9 +636,13 @@ function triggerFileInput() {
 }
 
 async function handleFileSelect(event) {
-  const files = Array.from(event.target.files)
+  const files = Array.from(event.target?.files || [])
+  if (files.length === 0) return
   await processFiles(files)
-  event.target.value = ''
+  // Reset input für erneute Auswahl derselben Datei
+  if (event.target) {
+    event.target.value = ''
+  }
 }
 
 async function processFiles(files) {
@@ -681,6 +726,46 @@ async function uploadFile(file) {
 
 function removeFile(index) {
   uploadedFiles.value.splice(index, 1)
+}
+
+// Drag & Drop Handlers
+function handleDragOver(event) {
+  isDragging.value = true
+}
+
+function handleDragLeave(event) {
+  isDragging.value = false
+}
+
+async function handleDrop(event) {
+  isDragging.value = false
+  const files = Array.from(event.dataTransfer.files)
+  if (files.length > 0) {
+    await processFiles(files)
+  }
+}
+
+// Paste Handler (Strg+V für Bilder)
+async function handlePaste(event) {
+  const items = event.clipboardData?.items
+  if (!items) return
+
+  for (const item of items) {
+    // Nur Bilder aus der Zwischenablage verarbeiten
+    if (item.type.startsWith('image/')) {
+      event.preventDefault() // Verhindere Text-Paste wenn Bild gefunden
+      const file = item.getAsFile()
+      if (file) {
+        // Generiere Dateinamen mit Timestamp
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+        const extension = file.type.split('/')[1] || 'png'
+        const namedFile = new File([file], `screenshot-${timestamp}.${extension}`, { type: file.type })
+        await processFiles([namedFile])
+        success(t('messageInput.imagePasted'))
+      }
+      break // Nur ein Bild verarbeiten
+    }
+  }
 }
 
 // Send Message Functions

@@ -6,6 +6,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 )
@@ -17,6 +19,7 @@ type ModelService struct {
 	defaultModel    string
 	selectedModel   string // Aktuell vom User ausgewaehltes Modell
 	systemPrompt    string
+	modelsDir       string // Verzeichnis fuer lokale GGUF-Modelle
 	mu              sync.RWMutex
 }
 
@@ -25,7 +28,8 @@ type ModelServiceConfig struct {
 	OllamaURL       string
 	DefaultModel    string
 	SystemPrompt    string
-	SkipOllamaCheck bool // True wenn Ollama nicht der aktive Provider ist
+	ModelsDir       string // Verzeichnis fuer lokale GGUF-Modelle
+	SkipOllamaCheck bool   // True wenn Ollama nicht der aktive Provider ist
 }
 
 // DefaultModelServiceConfig gibt die Standard-Konfiguration zurueck
@@ -69,6 +73,7 @@ func NewModelService(config ModelServiceConfig) *ModelService {
 		defaultModel:    config.DefaultModel,
 		selectedModel:   config.DefaultModel,
 		systemPrompt:    config.SystemPrompt,
+		modelsDir:       config.ModelsDir,
 	}
 
 	log.Printf("ModelService initialisiert (llama-server Modus)")
@@ -234,14 +239,40 @@ func (s *ModelService) PullModel(modelName string, onProgress func(progress stri
 }
 
 // DeleteModel loescht ein Modell
+// Funktioniert auch ohne aktiven Provider - loescht GGUF-Dateien direkt
 func (s *ModelService) DeleteModel(modelName string) error {
-	provider, ok := s.providerManager.GetActiveProvider()
-	if !ok {
-		return fmt.Errorf("kein aktiver Provider")
+	log.Printf("Loesche Modell: %s", modelName)
+
+	// Zuerst versuchen, die Datei direkt zu loeschen (fuer lokale GGUF-Modelle)
+	if s.modelsDir != "" {
+		// Suche in verschiedenen Verzeichnissen
+		searchDirs := []string{
+			s.modelsDir,
+			filepath.Join(s.modelsDir, "library"),
+			filepath.Join(s.modelsDir, "vision"),
+			filepath.Join(s.modelsDir, "custom"),
+		}
+
+		for _, dir := range searchDirs {
+			modelPath := filepath.Join(dir, modelName)
+			if _, err := os.Stat(modelPath); err == nil {
+				// Datei gefunden - loeschen
+				if err := os.Remove(modelPath); err != nil {
+					return fmt.Errorf("Modell konnte nicht geloescht werden: %w", err)
+				}
+				log.Printf("Modell geloescht: %s", modelPath)
+				return nil
+			}
+		}
 	}
 
-	log.Printf("Loesche Modell: %s", modelName)
-	return provider.DeleteModel(modelName)
+	// Falls nicht als Datei gefunden, versuche es ueber den Provider
+	provider, ok := s.providerManager.GetActiveProvider()
+	if ok {
+		return provider.DeleteModel(modelName)
+	}
+
+	return fmt.Errorf("Modell nicht gefunden: %s", modelName)
 }
 
 // GetModelDetails gibt Details zu einem Modell zurueck

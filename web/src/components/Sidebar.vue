@@ -281,19 +281,33 @@
         </div>
         <!-- Server + User: 2-Spalten Layout -->
         <div class="grid grid-cols-2 gap-2 pt-1.5 border-t border-gray-700/30">
-          <!-- Server Status -->
-          <div class="flex items-center gap-1.5">
-            <ServerStackIcon class="w-3.5 h-3.5 text-gray-400" />
+          <!-- Server Status (Chat + Vision kompakt) -->
+          <div class="flex items-center gap-1.5 text-[10px]">
+            <ServerStackIcon class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+            <!-- Chat Server -->
             <span
-              class="flex items-center gap-1 font-semibold"
-              :class="llamaServerOnline ? 'text-green-400' : 'text-red-400'"
-              :title="llamaServerOnline ? $t('sidebar.serverRunning') : $t('sidebar.serverNotReachable')"
+              class="flex items-center gap-0.5"
+              :class="llamaServerOnline ? 'text-green-400' : 'text-gray-500'"
+              :title="llamaServerOnline ? $t('sidebar.chatServerRunning') : $t('sidebar.chatServerOffline')"
             >
               <span
-                class="w-1.5 h-1.5 rounded-full"
-                :class="llamaServerOnline ? 'bg-green-400 animate-pulse' : 'bg-red-400'"
+                class="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                :class="llamaServerOnline ? 'bg-green-400' : 'bg-gray-500'"
               ></span>
-              {{ llamaServerOnline ? $t('sidebar.online') : $t('sidebar.offline') }}
+              <span class="font-medium">Chat</span>
+            </span>
+            <span class="text-gray-600">|</span>
+            <!-- Vision Server -->
+            <span
+              class="flex items-center gap-0.5"
+              :class="visionServerRunning ? 'text-cyan-400' : 'text-gray-500'"
+              :title="visionServerTitle"
+            >
+              <span
+                class="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                :class="visionServerRunning ? 'bg-cyan-400' : 'bg-gray-500'"
+              ></span>
+              <span class="font-medium">Vision</span>
             </span>
           </div>
           <!-- User + Help + Logout -->
@@ -762,6 +776,32 @@ const fileInput = ref(null)
 const llamaServerOnline = ref(false)
 let healthCheckInterval = null
 
+// Vision-Server Status
+const visionServerStatus = ref({
+  available: false,
+  running: false,
+  ready: false,
+  modelName: '',
+  timeUntilStop: ''
+})
+
+// Computed: Vision Server läuft?
+const visionServerRunning = computed(() => visionServerStatus.value.running)
+
+// Computed: Vision Server Tooltip
+const visionServerTitle = computed(() => {
+  const status = visionServerStatus.value
+  if (!status.available) {
+    return t('sidebar.visionNotConfigured') || 'Vision-Server nicht konfiguriert'
+  }
+  if (status.running) {
+    const model = status.modelName || 'Vision-Modell'
+    const time = status.timeUntilStop || ''
+    return `${model} aktiv${time ? ` (Auto-Stop in ${time})` : ''}`
+  }
+  return t('sidebar.visionOffline') || 'Vision-Server gestoppt (On-Demand)'
+})
+
 // Sorted projects by last update
 const sortedProjects = computed(() => {
   return [...projects.value].sort((a, b) => {
@@ -866,10 +906,10 @@ onMounted(async () => {
   document.addEventListener('click', closeMenus)
   document.addEventListener('keydown', handleKeyDown)
 
-  // Initial llama-server health check
-  checkLlamaServerHealth()
+  // Initial server health checks (Chat + Vision)
+  checkAllServersHealth()
   // Check every 10 seconds
-  healthCheckInterval = setInterval(checkLlamaServerHealth, 10000)
+  healthCheckInterval = setInterval(checkAllServersHealth, 10000)
 })
 
 onBeforeUnmount(() => {
@@ -891,6 +931,37 @@ async function checkLlamaServerHealth() {
     // Bei Netzwerkfehler: offline
     llamaServerOnline.value = false
   }
+}
+
+// Vision-Server status check
+async function checkVisionServerStatus() {
+  try {
+    const result = await api.getVisionServerStatus()
+    visionServerStatus.value = {
+      available: result.available || false,
+      running: result.running || false,
+      ready: result.ready || false,
+      modelName: result.modelName || '',
+      timeUntilStop: result.timeUntilStop || ''
+    }
+  } catch (err) {
+    // Bei Fehler: Status zurücksetzen
+    visionServerStatus.value = {
+      available: false,
+      running: false,
+      ready: false,
+      modelName: '',
+      timeUntilStop: ''
+    }
+  }
+}
+
+// Kombinierter Health-Check für beide Server
+async function checkAllServersHealth() {
+  await Promise.all([
+    checkLlamaServerHealth(),
+    checkVisionServerStatus()
+  ])
 }
 
 // Handle keyboard shortcuts

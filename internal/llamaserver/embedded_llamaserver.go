@@ -118,6 +118,79 @@ func hasLlamaLibraries(dir string) bool {
 	return err == nil && len(matches) > 0
 }
 
+// GetLlamaServerForBackend sucht nach llama-server Binary für ein spezifisches Backend
+// Gibt den Pfad zur Binary und den Library-Pfad zurück
+// Backend-Priorität: cuda > rocm > vulkan > cpu
+// Backend-Verzeichnisse: dataDir/bin-cuda/, dataDir/bin-rocm/, dataDir/bin-vulkan/, dataDir/bin/
+func GetLlamaServerForBackend(dataDir string, backend string) (binaryPath string, libraryPath string, err error) {
+	var binaryName string
+	if runtime.GOOS == "windows" {
+		binaryName = "llama-server.exe"
+	} else {
+		binaryName = "llama-server"
+	}
+
+	// Backend-spezifische Verzeichnisse (Priorität je nach Backend)
+	var searchDirs []string
+	switch backend {
+	case "cuda":
+		searchDirs = []string{
+			filepath.Join(dataDir, "bin-cuda"),
+			filepath.Join(dataDir, "bin"),
+		}
+	case "rocm":
+		searchDirs = []string{
+			filepath.Join(dataDir, "bin-rocm"),
+			filepath.Join(dataDir, "bin"),
+		}
+	case "vulkan":
+		searchDirs = []string{
+			filepath.Join(dataDir, "bin-vulkan"),
+			filepath.Join(dataDir, "bin"),
+		}
+	case "metal":
+		// Apple Silicon - Metal Backend (macOS)
+		searchDirs = []string{
+			filepath.Join(dataDir, "bin"),  // Metal ist Standard auf macOS
+		}
+	case "cpu":
+		searchDirs = []string{
+			filepath.Join(dataDir, "bin"),
+		}
+	default: // "auto" - beste verfügbare (plattformabhängig)
+		if runtime.GOOS == "darwin" {
+			// macOS: Metal ist Standard
+			searchDirs = []string{
+				filepath.Join(dataDir, "bin"),
+			}
+		} else {
+			// Linux/Windows: CUDA > ROCm > Vulkan > CPU
+			searchDirs = []string{
+				filepath.Join(dataDir, "bin-cuda"),
+				filepath.Join(dataDir, "bin-rocm"),
+				filepath.Join(dataDir, "bin-vulkan"),
+				filepath.Join(dataDir, "bin"),
+			}
+		}
+	}
+
+	// Suche in den Verzeichnissen
+	for _, dir := range searchDirs {
+		candidatePath := filepath.Join(dir, binaryName)
+		if info, err := os.Stat(candidatePath); err == nil && info.Mode().IsRegular() {
+			log.Printf("✅ llama-server gefunden (%s): %s", backend, candidatePath)
+			foundLibPath := dir
+			if hasLlamaLibraries(dir) {
+				log.Printf("📚 Libraries gefunden: %s", dir)
+			}
+			return candidatePath, foundLibPath, nil
+		}
+	}
+
+	// Fallback auf Standard-Funktion
+	return GetOrExtractLlamaServer(dataDir)
+}
+
 // GetOrExtractLlamaServer sucht nach llama-server Binary oder extrahiert es aus eingebetteten Daten
 // Gibt den Pfad zur Binary und den Library-Pfad zurück
 // WICHTIG: Sucht IMMER ZUERST im dataDir/bin/ Ordner - das ist der Ort für heruntergeladene Binaries

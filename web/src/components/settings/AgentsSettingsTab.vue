@@ -61,6 +61,48 @@
         </div>
       </div>
 
+      <!-- Vision-Server Idle Timeout (NEU: On-Demand Vision) -->
+      <div class="mb-4 p-4 rounded-xl bg-cyan-50/50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-700">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex-1">
+            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+              <ClockIcon class="w-4 h-4 text-cyan-500" />
+              {{ $t('settings.agents.visionServerTimeout') || 'Vision-Server Timeout' }}
+            </label>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              {{ $t('settings.agents.visionServerTimeoutDesc') || 'Der Vision-Server läuft parallel zum Chat-Server und stoppt nach Inaktivität automatisch.' }}
+            </p>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <input
+            type="range"
+            v-model.number="localVisionIdleTimeout"
+            @change="onVisionTimeoutChange"
+            min="60"
+            max="900"
+            step="60"
+            class="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+          />
+          <span class="text-sm font-medium text-gray-700 dark:text-gray-300 w-20 text-right">
+            {{ formatTimeout(localVisionIdleTimeout) }}
+          </span>
+        </div>
+        <!-- Vision-Server Status -->
+        <div class="mt-3 flex items-center gap-2 text-xs">
+          <span
+            class="inline-flex items-center gap-1 px-2 py-1 rounded-full"
+            :class="visionServerStatus?.running ? 'bg-cyan-100 dark:bg-cyan-900/50 text-cyan-700 dark:text-cyan-300' : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'"
+          >
+            <span class="w-1.5 h-1.5 rounded-full" :class="visionServerStatus?.running ? 'bg-cyan-500' : 'bg-gray-400'"></span>
+            {{ visionServerStatus?.running ? 'Vision-Server aktiv' : 'Vision-Server gestoppt (On-Demand)' }}
+          </span>
+          <span v-if="visionServerStatus?.timeUntilStop" class="text-gray-400">
+            Auto-Stop in {{ visionServerStatus.timeUntilStop }}
+          </span>
+        </div>
+      </div>
+
       <!-- Web Search: Think First -->
       <div class="mb-4 p-4 rounded-xl bg-blue-50/50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700">
         <div class="flex items-center justify-between">
@@ -178,7 +220,8 @@ import {
   FolderIcon,
   FolderOpenIcon,
   ArrowPathIcon,
-  TrashIcon
+  TrashIcon,
+  ClockIcon
 } from '@heroicons/vue/24/outline'
 import ToggleSwitch from '../ToggleSwitch.vue'
 import { formatDateAbsolute } from '../../composables/useFormatters'
@@ -210,6 +253,14 @@ const props = defineProps({
   fileSearchStatus: {
     type: Object,
     default: null
+  },
+  visionServerStatus: {
+    type: Object,
+    default: null
+  },
+  visionIdleTimeout: {
+    type: Number,
+    default: 300
   }
 })
 
@@ -217,6 +268,7 @@ const emit = defineEmits([
   'update:settings',
   'update:modelSelectionSettings',
   'update:webSearchThinkFirst',
+  'update:visionIdleTimeout',
   'add-folder',
   'remove-folder',
   'reindex-folder'
@@ -226,6 +278,7 @@ const emit = defineEmits([
 const localSettings = ref({ ...props.settings })
 const localModelSettings = ref({ ...props.modelSelectionSettings })
 const localThinkFirst = ref(props.webSearchThinkFirst)
+const localVisionIdleTimeout = ref(props.visionIdleTimeout)
 const newFolderPath = ref('')
 
 // Sync with parent
@@ -241,6 +294,10 @@ watch(() => props.webSearchThinkFirst, (newVal) => {
   localThinkFirst.value = newVal
 })
 
+watch(() => props.visionIdleTimeout, (newVal) => {
+  localVisionIdleTimeout.value = newVal
+})
+
 watch(localSettings, (newVal) => {
   emit('update:settings', newVal)
 }, { deep: true })
@@ -251,6 +308,15 @@ function onModelSettingsChange() {
 
 function onThinkFirstChange(value) {
   emit('update:webSearchThinkFirst', value)
+}
+
+function onVisionTimeoutChange() {
+  emit('update:visionIdleTimeout', localVisionIdleTimeout.value)
+}
+
+function formatTimeout(seconds) {
+  if (seconds < 120) return `${seconds}s`
+  return `${Math.floor(seconds / 60)} Min`
 }
 
 function onAddFolder() {

@@ -20,6 +20,8 @@ func (s *Service) GetVisionSettings() VisionSettings {
 		ModelPath:   s.GetString(KeyVisionModelPath, ""),
 		MmprojPath:  s.GetString(KeyVisionMmprojPath, ""),
 		AutoRestore: s.GetBool(KeyVisionAutoRestore, true),
+		IdleTimeout: s.GetInt(KeyVisionIdleTimeout, 300), // Default: 5 Min (300 Sekunden), -1 = kein Timeout
+		AutoStart:   s.GetBool(KeyVisionAutoStart, false), // Default: On-Demand (nicht beim Start)
 	}
 }
 
@@ -40,7 +42,18 @@ func (s *Service) SaveVisionSettings(settings VisionSettings) error {
 	if err := s.SetBool(KeyVisionAutoRestore, settings.AutoRestore); err != nil {
 		return err
 	}
-	log.Printf("Vision-Einstellungen gespeichert: enabled=%v, model=%s", settings.Enabled, settings.Model)
+	// Idle-Timeout speichern (auch -1 für "kein Timeout")
+	if settings.IdleTimeout != 0 {
+		if err := s.SetInt(KeyVisionIdleTimeout, settings.IdleTimeout); err != nil {
+			return err
+		}
+	}
+	// AutoStart speichern
+	if err := s.SetBool(KeyVisionAutoStart, settings.AutoStart); err != nil {
+		return err
+	}
+	log.Printf("Vision-Einstellungen gespeichert: enabled=%v, model=%s, idleTimeout=%ds, autoStart=%v",
+		settings.Enabled, settings.Model, settings.IdleTimeout, settings.AutoStart)
 	return nil
 }
 

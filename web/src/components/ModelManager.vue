@@ -1442,8 +1442,24 @@
               class="w-4 h-4 text-fleet-orange-500 focus:ring-fleet-orange-500"
             />
             <div class="flex-1 min-w-0">
-              <p class="font-mono text-sm font-medium text-gray-900 dark:text-white truncate">
-                {{ file }}
+              <!-- Quantization Badge + Size prominent anzeigen -->
+              <div class="flex items-center gap-2 mb-1">
+                <span
+                  v-if="file.quantization"
+                  class="px-2 py-0.5 text-xs font-bold rounded bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300"
+                >
+                  {{ file.quantization }}
+                </span>
+                <span
+                  v-if="file.sizeHuman"
+                  class="px-2 py-0.5 text-xs font-semibold rounded bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300"
+                >
+                  {{ file.sizeHuman }}
+                </span>
+              </div>
+              <!-- Dateiname (kleiner, kann abgeschnitten werden) -->
+              <p class="font-mono text-xs text-gray-600 dark:text-gray-400 truncate">
+                {{ file.filename || file }}
               </p>
             </div>
           </label>
@@ -2786,13 +2802,15 @@ async function downloadHFModel(model) {
   }
 
   // If siblings are missing (from search/german/popular endpoints), load details first
-  if (!model.siblings || model.siblings.length === 0) {
+  if (!model.ggufFiles || model.ggufFiles.length === 0) {
     console.log('Loading model details for:', model.modelId || model.id)
     try {
       const detailsResponse = await api.getHuggingFaceModelDetails(model.modelId || model.id)
-      if (detailsResponse && detailsResponse.siblings) {
-        model.siblings = detailsResponse.siblings
-        console.log(`Loaded ${model.siblings.length} files for model`)
+      if (detailsResponse && (detailsResponse.ggufFiles || detailsResponse.siblings)) {
+        // Prefer ggufFiles (with size/quantization) over siblings (just filenames)
+        model.ggufFiles = detailsResponse.ggufFiles || []
+        model.siblings = detailsResponse.siblings || []
+        console.log(`Loaded ${model.ggufFiles.length} GGUF files with details for model`)
       } else {
         alert('❌ Keine Dateien gefunden für dieses Modell')
         return
@@ -2805,25 +2823,27 @@ async function downloadHFModel(model) {
   }
 
   // For HuggingFace models, we need to select which file to download
-  if (model.siblings && model.siblings.length > 0) {
-    const ggufFiles = model.siblings.filter(f => f.toLowerCase().endsWith('.gguf'))
-    if (ggufFiles.length === 0) {
-      alert('❌ Keine GGUF-Dateien gefunden für dieses Modell')
-      return
-    }
+  // Prefer ggufFiles (with size/quantization info) over siblings (just filenames)
+  const ggufFilesData = model.ggufFiles || []
+  const ggufFiles = ggufFilesData.length > 0
+    ? ggufFilesData
+    : (model.siblings || []).filter(f => f.toLowerCase().endsWith('.gguf')).map(f => ({ filename: f }))
 
-    if (ggufFiles.length === 1) {
-      // Only one file - download directly
-      confirmAndDownloadHFFile(model, ggufFiles[0])
-    } else {
-      // Multiple files - show modal to let user choose
-      fileSelectionModel.value = model
-      fileSelectionFiles.value = ggufFiles
-      selectedFileIndex.value = 0
-      showFileSelectionModal.value = true
-    }
+  if (ggufFiles.length === 0) {
+    alert('❌ Keine GGUF-Dateien gefunden für dieses Modell')
+    return
+  }
+
+  if (ggufFiles.length === 1) {
+    // Only one file - download directly
+    const filename = ggufFiles[0].filename || ggufFiles[0]
+    confirmAndDownloadHFFile(model, filename)
   } else {
-    alert('❌ Keine Dateien gefunden für dieses Modell')
+    // Multiple files - show modal to let user choose
+    fileSelectionModel.value = model
+    fileSelectionFiles.value = ggufFiles
+    selectedFileIndex.value = 0
+    showFileSelectionModal.value = true
   }
 }
 
@@ -2998,7 +3018,9 @@ async function confirmAndDownloadHFFile(model, filename) {
 function confirmFileSelection() {
   if (fileSelectionModel.value && fileSelectionFiles.value.length > 0) {
     const selectedFile = fileSelectionFiles.value[selectedFileIndex.value]
-    confirmAndDownloadHFFile(fileSelectionModel.value, selectedFile)
+    // Handle both object format (with filename property) and string format
+    const filename = selectedFile.filename || selectedFile
+    confirmAndDownloadHFFile(fileSelectionModel.value, filename)
     closeFileSelectionModal()
   }
 }

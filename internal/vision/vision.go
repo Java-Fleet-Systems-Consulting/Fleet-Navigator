@@ -614,3 +614,170 @@ func GetTesseractLanguages(dataDir string) []string {
 
 	return languages
 }
+
+// =============================================================================
+// DOKUMENT-KLASSIFIZIERUNG
+// Erkennt ob ein Bild ein rechtliches/geschäftliches Dokument ist
+// =============================================================================
+
+// ImageClassification enthält das Ergebnis der Bildklassifizierung
+type ImageClassification struct {
+	IsDocument     bool     `json:"isDocument"`     // Ist es ein Dokument?
+	DocumentType   string   `json:"documentType"`   // Art des Dokuments (invoice, contract, letter, etc.)
+	Confidence     float64  `json:"confidence"`     // Konfidenz 0.0-1.0
+	LegalRelevance bool     `json:"legalRelevance"` // Hat rechtliche Relevanz?
+	OCRText        string   `json:"ocrText"`        // Extrahierter Text (wenn Dokument)
+	Indicators     []string `json:"indicators"`     // Gefundene Indikatoren
+}
+
+// ClassifyImage klassifiziert ein Bild als Dokument oder normales Foto
+// Verwendet schnelle OCR-Analyse statt langsamem Vision-Modell
+func ClassifyImage(base64Image string, dataDir string) (*ImageClassification, error) {
+	result := &ImageClassification{
+		Confidence: 0.0,
+	}
+
+	// Tesseract OCR für schnelle Textextraktion
+	ocrText, err := TesseractOCRFromBase64(base64Image, dataDir, "deu+eng")
+	if err != nil {
+		// Kein Tesseract verfügbar - kann nicht klassifizieren, nehme Foto an
+		log.Printf("[ClassifyImage] OCR fehlgeschlagen: %v - nehme Foto an", err)
+		return result, nil
+	}
+
+	result.OCRText = ocrText
+	textLower := strings.ToLower(ocrText)
+	textLen := len(ocrText)
+
+	// Wenig Text = wahrscheinlich Foto
+	if textLen < 50 {
+		result.IsDocument = false
+		result.Confidence = 0.9
+		return result, nil
+	}
+
+	// === RECHTLICHE INDIKATOREN (hohe Relevanz) ===
+	legalIndicators := []string{
+		"mahnung", "kündigung", "vertrag", "mietvertrag", "arbeitsvertrag",
+		"vollmacht", "testament", "urteil", "bescheid", "klage",
+		"anwalt", "rechtsanwalt", "gericht", "aktenzeichen", "geschäftszeichen",
+		"frist", "zahlungsfrist", "kündigungsfrist", "widerspruch",
+		"schadensersatz", "haftung", "gewährleistung", "bürgschaft",
+	}
+
+	// === GESCHÄFTLICHE INDIKATOREN ===
+	businessIndicators := []string{
+		"rechnung", "invoice", "rechnungsnummer", "rechnungsdatum",
+		"bestellung", "lieferschein", "angebot", "kostenvoranschlag",
+		"steuernummer", "ust-id", "iban", "bic", "kontonummer",
+		"zahlungsziel", "skonto", "netto", "brutto", "mwst", "mehrwertsteuer",
+		"bankverbindung", "überweisung", "lastschrift",
+	}
+
+	// === FORMALE BRIEF-INDIKATOREN ===
+	letterIndicators := []string{
+		"sehr geehrte", "mit freundlichen grüßen", "hochachtungsvoll",
+		"betreff", "datum:", "ihr zeichen", "unser zeichen",
+		"absender", "empfänger", "einschreiben",
+	}
+
+	// === BEHÖRDLICHE INDIKATOREN ===
+	officialIndicators := []string{
+		"finanzamt", "standesamt", "einwohnermeldeamt", "arbeitsamt",
+		"jobcenter", "sozialamt", "jugendamt", "ordnungsamt",
+		"steuerbescheid", "bußgeldbescheid", "mahnbescheid", "vollstreckungsbescheid",
+		"amtsgericht", "landgericht", "oberlandesgericht", "bundesgericht",
+	}
+
+	// Indikatoren zählen
+	foundIndicators := []string{}
+	legalCount := 0
+	businessCount := 0
+	letterCount := 0
+	officialCount := 0
+
+	for _, ind := range legalIndicators {
+		if strings.Contains(textLower, ind) {
+			legalCount++
+			foundIndicators = append(foundIndicators, "legal:"+ind)
+		}
+	}
+	for _, ind := range businessIndicators {
+		if strings.Contains(textLower, ind) {
+			businessCount++
+			foundIndicators = append(foundIndicators, "business:"+ind)
+		}
+	}
+	for _, ind := range letterIndicators {
+		if strings.Contains(textLower, ind) {
+			letterCount++
+			foundIndicators = append(foundIndicators, "letter:"+ind)
+		}
+	}
+	for _, ind := range officialIndicators {
+		if strings.Contains(textLower, ind) {
+			officialCount++
+			foundIndicators = append(foundIndicators, "official:"+ind)
+		}
+	}
+
+	result.Indicators = foundIndicators
+	totalIndicators := legalCount + businessCount + letterCount + officialCount
+
+	// === KLASSIFIZIERUNG ===
+	if totalIndicators == 0 && textLen < 200 {
+		// Wenig Text, keine Indikatoren = Foto
+		result.IsDocument = false
+		result.Confidence = 0.8
+		return result, nil
+	}
+
+	// Dokumenttyp bestimmen
+	if officialCount >= 2 || (officialCount >= 1 && legalCount >= 1) {
+		result.IsDocument = true
+		result.DocumentType = "official_document" // Behördliches Dokument
+		result.LegalRelevance = true
+		result.Confidence = 0.95
+	} else if legalCount >= 2 {
+		result.IsDocument = true
+		result.DocumentType = "legal_document" // Rechtliches Dokument
+		result.LegalRelevance = true
+		result.Confidence = 0.9
+	} else if businessCount >= 3 || (businessCount >= 2 && strings.Contains(textLower, "€")) {
+		result.IsDocument = true
+		if strings.Contains(textLower, "rechnung") || strings.Contains(textLower, "invoice") {
+			result.DocumentType = "invoice"
+		} else if strings.Contains(textLower, "angebot") {
+			result.DocumentType = "quote"
+		} else {
+			result.DocumentType = "business_document"
+		}
+		result.LegalRelevance = businessCount >= 2 && legalCount >= 1
+		result.Confidence = 0.85
+	} else if letterCount >= 2 {
+		result.IsDocument = true
+		result.DocumentType = "letter"
+		result.LegalRelevance = legalCount >= 1 || officialCount >= 1
+		result.Confidence = 0.8
+	} else if totalIndicators >= 2 {
+		result.IsDocument = true
+		result.DocumentType = "document"
+		result.LegalRelevance = legalCount >= 1
+		result.Confidence = 0.7
+	} else if textLen > 500 {
+		// Viel Text aber wenige Indikatoren - wahrscheinlich trotzdem Dokument
+		result.IsDocument = true
+		result.DocumentType = "text_document"
+		result.LegalRelevance = false
+		result.Confidence = 0.6
+	} else {
+		// Zu wenig Evidenz
+		result.IsDocument = false
+		result.Confidence = 0.5
+	}
+
+	log.Printf("[ClassifyImage] Ergebnis: isDocument=%v, type=%s, legal=%v, confidence=%.2f, indicators=%d",
+		result.IsDocument, result.DocumentType, result.LegalRelevance, result.Confidence, len(foundIndicators))
+
+	return result, nil
+}
